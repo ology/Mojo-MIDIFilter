@@ -46,14 +46,7 @@ sub load_state () {
 }
 
 # Runs $code with an exclusive lock held across the whole
-# load -> mutate -> save cycle, so two requests (different hypnotoad
-# workers, or just two fast successive submits) can never both read the
-# same snapshot and silently clobber each other's write. $code receives
-# no arguments and should mutate @filters / $next_id directly (they're
-# freshly reloaded from disk before it runs); its return value is ignored.
-# This is what actually fixes "adding several filters only keeps one" --
-# the earlier before_dispatch reload alone only prevented *stale* reads,
-# not concurrent read-modify-write races.
+# load -> mutate -> save cycle
 sub with_filters_lock ($code) {
     open my $lock_fh, '>', STATELOCK or die "Can't open @{[STATELOCK]}: $!\n";
     flock($lock_fh, LOCK_EX) or die "Can't lock @{[STATELOCK]}: $!\n";
