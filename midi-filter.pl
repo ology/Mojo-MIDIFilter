@@ -32,19 +32,22 @@ my @filters;
 my $next_id = 1;
 
 # --- transient, per-process only: PIDs of currently running filters ---
-# Never persisted -- a PID from a previous process is meaningless after a
-# restart, same reasoning as $midi_out/$timer_id in phrase-generator.pl.
 my %pid_of;
 
 my %edit_filter; # single record being edited, mirrors phrase-generator's %edit_part
 
-{
-    if (-e STATE) {
-        my $state = retrieve(STATE);
-        @filters = @{ $state->{filters} // [] };
-        $next_id = $state->{next_id} // 1;
-    }
+sub load_state () {
+    return unless -e STATE;
+    my $state = retrieve(STATE);
+    @filters = @{ $state->{filters} // [] };
+    $next_id = $state->{next_id} // 1;
 }
+
+load_state();
+
+hook before_dispatch => sub ($c) {
+    load_state();
+};
 
 $SIG{INT} = sub {
     say "\nStopping all filters...";
