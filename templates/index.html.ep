@@ -130,7 +130,7 @@
 
           <div class="col-md-6">
             <label class="form-label">Input port</label>
-            <select id="input-ports" name="input" class="form-control" list="input-ports">
+            <select id="input-ports" name="input" class="form-select" list="input-ports">
 % for my $p (@$inputs) {
               <option value="<%= $p %>" <%= $edit->{input} && $edit->{input} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
@@ -139,7 +139,7 @@
 
           <div class="col-md-6">
             <label class="form-label">Output port</label>
-            <select id="output-ports" name="output" class="form-control" list="output-ports">
+            <select id="output-ports" name="output" class="form-select" list="output-ports">
 % for my $p (@$outputs) {
               <option value="<%= $p %>" <%= $edit->{output} && $edit->{output} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
