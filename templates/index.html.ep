@@ -1,0 +1,224 @@
+% layout 'default';
+% title 'MIDI Filter';
+
+<div class="container pb-5">
+
+% if (my $msg = flash('message')) {
+  <div class="alert alert-success" role="alert"><%= $msg %></div>
+% }
+% if (my $err = flash('error')) {
+  <div class="alert alert-danger" role="alert"><%= $err %></div>
+% }
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h4 mb-0">Configured Filters</h2>
+    <div>
+      <form method="post" action="<%= url_for('start_all') %>" class="d-inline">
+        <%= csrf_field %>
+        <button type="submit" class="btn btn-success btn-sm" <%= @$filters ? '' : 'disabled' %>>Start All</button>
+      </form>
+      <form method="post" action="<%= url_for('stop_all') %>" class="d-inline">
+        <%= csrf_field %>
+        <button type="submit" class="btn btn-outline-danger btn-sm" <%= @$filters ? '' : 'disabled' %>>Stop All</button>
+      </form>
+    </div>
+  </div>
+
+% if (!@$filters) {
+  <p class="text-muted">No filters configured yet — add one below.</p>
+% } else {
+  <div class="table-responsive mb-4">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Name</th>
+          <th>Filter</th>
+          <th>Input</th>
+          <th>Output</th>
+          <th>Ch</th>
+          <th>CC</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+% for my $f (@$filters) {
+%   my $is_running = $running->{ $f->{id} };
+        <tr>
+          <td>
+% if ($is_running) {
+            <span class="badge bg-success">running</span>
+% } else {
+            <span class="badge bg-secondary">stopped</span>
+% }
+          </td>
+          <td><%= $f->{name} %></td>
+          <td><code><%= $f->{filter} %></code></td>
+          <td><%= $f->{input} %></td>
+          <td><%= $f->{output} %></td>
+          <td><%= $f->{channel} // '—' %></td>
+          <td><%= $f->{control} // '—' %></td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm" role="group">
+% if ($is_running) {
+              <form method="post" action="<%= url_for('stop') %>" class="d-inline">
+                <%= csrf_field %>
+                <input type="hidden" name="id" value="<%= $f->{id} %>">
+                <button type="submit" class="btn btn-outline-danger">Stop</button>
+              </form>
+% } else {
+              <form method="post" action="<%= url_for('start') %>" class="d-inline">
+                <%= csrf_field %>
+                <input type="hidden" name="id" value="<%= $f->{id} %>">
+                <button type="submit" class="btn btn-outline-success">Start</button>
+              </form>
+              <form method="post" action="<%= url_for('edit') %>" class="d-inline">
+                <%= csrf_field %>
+                <input type="hidden" name="edit_id" value="<%= $f->{id} %>">
+                <button type="submit" class="btn btn-outline-secondary">Edit</button>
+              </form>
+              <form method="post" action="<%= url_for('delete') %>" class="d-inline"
+                    onsubmit="return confirm('Delete this filter?');">
+                <%= csrf_field %>
+                <input type="hidden" name="delete_id" value="<%= $f->{id} %>">
+                <button type="submit" class="btn btn-outline-danger">Delete</button>
+              </form>
+% }
+            </div>
+          </td>
+        </tr>
+% }
+      </tbody>
+    </table>
+  </div>
+% }
+
+  <div class="card">
+    <div class="card-header">
+      <%= keys %$edit ? 'Edit Filter' : 'Add Filter' %>
+    </div>
+    <div class="card-body">
+      <form method="post" action="<%= url_for('filters') %>">
+        <%= csrf_field %>
+% if (keys %$edit) {
+        <input type="hidden" name="edit_id" value="<%= $edit->{id} %>">
+% }
+
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Name</label>
+            <input type="text" name="name" class="form-control"
+                   value="<%= $edit->{name} // '' %>" placeholder="e.g. Mod Wheel Breathe">
+          </div>
+
+          <div class="col-md-4">
+            <label class="form-label">Filter type</label>
+            <select name="filter" class="form-select">
+% for my $type (@$filter_types) {
+              <option value="<%= $type %>" <%= ($edit->{filter} // 'breathe') eq $type ? 'selected' : '' %>><%= $type %></option>
+% }
+            </select>
+          </div>
+
+          <div class="col-md-4">
+            <div class="form-check mt-4 pt-2">
+              <input type="checkbox" class="form-check-input" id="verbose" name="verbose" value="1"
+                     <%= $edit->{verbose} ? 'checked' : '' %>>
+              <label class="form-check-label" for="verbose">Verbose</label>
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Input port</label>
+            <input type="text" name="input" class="form-control" list="input-ports"
+                   value="<%= $edit->{input} // 'joystick' %>">
+            <datalist id="input-ports">
+% for my $p (@$inputs) {
+              <option value="<%= $p %>">
+% }
+            </datalist>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Output port</label>
+            <input type="text" name="output" class="form-control" list="output-ports"
+                   value="<%= $edit->{output} // 'usb' %>">
+            <datalist id="output-ports">
+% for my $p (@$outputs) {
+              <option value="<%= $p %>">
+% }
+            </datalist>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Channel (0–15)</label>
+            <input type="number" name="channel" class="form-control" min="0" max="15"
+                   value="<%= $edit->{channel} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Control (CC#)</label>
+            <input type="number" name="control" class="form-control" min="0" max="127"
+                   value="<%= $edit->{control} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Trigger (note)</label>
+            <input type="number" name="trigger" class="form-control" min="0" max="127"
+                   value="<%= $edit->{trigger} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Value</label>
+            <input type="number" name="value" class="form-control" min="0" max="127"
+                   value="<%= $edit->{value} // '' %>">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Initial point</label>
+            <input type="number" name="initial_point" class="form-control" min="0" max="127"
+                   value="<%= $edit->{initial_point} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Range bottom</label>
+            <input type="number" name="range_bottom" class="form-control" min="0" max="127"
+                   value="<%= $edit->{range_bottom} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Range top</label>
+            <input type="number" name="range_top" class="form-control" min="0" max="127"
+                   value="<%= $edit->{range_top} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Range step</label>
+            <input type="number" name="range_step" class="form-control" min="0" max="127"
+                   value="<%= $edit->{range_step} // '' %>">
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Time step (sec)</label>
+            <input type="number" name="time_step" class="form-control" step="0.01" min="0"
+                   value="<%= $edit->{time_step} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Step up</label>
+            <input type="number" name="step_up" class="form-control" min="0" max="127"
+                   value="<%= $edit->{step_up} // '' %>">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Step down</label>
+            <input type="number" name="step_down" class="form-control" min="0" max="127"
+                   value="<%= $edit->{step_down} // '' %>">
+          </div>
+        </div>
+
+        <div class="mt-4">
+          <button type="submit" class="btn btn-primary">
+            <%= keys %$edit ? 'Save Changes' : 'Add Filter' %>
+          </button>
+% if (keys %$edit) {
+          <a href="<%= url_for('cancel') %>" class="btn btn-outline-secondary">Cancel</a>
+% }
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
