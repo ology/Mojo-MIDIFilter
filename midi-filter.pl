@@ -11,10 +11,12 @@ use Mojolicious::Lite -signatures;
 use MIDI::RtMidi::FFI::Device ();
 use Storable qw(retrieve store);
 use FindBin qw($Bin);
+use Fcntl qw(:flock);
 
 use constant {
-    STATE  => 'midi-filter-state.dat',
-    RUNNER => "$Bin/filter_runner.pl",
+    STATE     => 'midi-filter-state.dat',
+    STATELOCK => 'midi-filter-state.lock',
+    RUNNER    => "$Bin/filter_runner.pl",
 };
 
 use constant FILTER_TYPES => qw(
@@ -41,6 +43,26 @@ sub load_state () {
     my $state = retrieve(STATE);
     @filters = @{ $state->{filters} // [] };
     $next_id = $state->{next_id} // 1;
+}
+
+# Runs $code with an exclusive lock held across the whole
+# load -> mutate -> save cycle, so two requests (different hypnotoad
+# workers, or just two fast successive submits) can never both read the
+# same snapshot and silently clobber each other's write. $code receives
+# no arguments and should mutate @filters / $next_id directly (they're
+# freshly reloaded from disk before it runs); its return value is ignored.
+# This is what actually fixes "adding several filters only keeps one" --
+# the earlier before_dispatch reload alone only prevented *stale* reads,
+# not concurrent read-modify-write races.
+sub with_filters_lock ($code) {
+    open my $lock_fh, '>', STATELOCK or die "Can't open @{[STATELOCK]}: $!\n";
+    flock($lock_fh, LOCK_EX) or die "Can't lock @{[STATELOCK]}: $!\n";
+
+    load_state();
+    $code->();
+    save_state();
+
+    close $lock_fh; # releases the lock
 }
 
 load_state();
@@ -161,24 +183,31 @@ post '/filters' => sub ($c) {
     $params{step_down}     = length($v->{step_down} // '')     ? $v->{step_down}     : undef;
     $params{verbose}       = $v->{verbose} ? 1 : 0;
 
-    if (defined $v->{edit_id} && length $v->{edit_id}) {
-        if (my $f = find_filter($v->{edit_id})) {
-            return $c->redirect_to('/') if is_running($f->{id}); # don't edit while running
-            %$f = (%$f, %params, id => $f->{id});
-            %edit_filter = ();
-            $c->flash(message => "Filter '$f->{name}' updated");
+    my $running_conflict = 0;
+
+    with_filters_lock(sub {
+        if (defined $v->{edit_id} && length $v->{edit_id}) {
+            if (my $f = find_filter($v->{edit_id})) {
+                if (is_running($f->{id})) { # don't edit while running
+                    $running_conflict = 1;
+                    return;
+                }
+                %$f = (%$f, %params, id => $f->{id});
+                %edit_filter = ();
+                $c->flash(message => "Filter '$f->{name}' updated");
+            }
+            else {
+                %edit_filter = ();
+                $c->flash(error => 'Filter no longer exists — edit cancelled');
+            }
         }
         else {
-            %edit_filter = ();
-            $c->flash(error => 'Filter no longer exists — edit cancelled');
+            push @filters, { %params, id => $next_id++ };
+            $c->flash(message => "Filter '$params{name}' added");
         }
-    }
-    else {
-        push @filters, { %params, id => $next_id++ };
-        $c->flash(message => "Filter '$params{name}' added");
-    }
+    });
 
-    save_state();
+    $c->flash(error => "Can't edit a running filter — stop it first") if $running_conflict;
     $c->redirect_to('/');
 } => 'filters';
 
@@ -199,9 +228,10 @@ post '/delete' => sub ($c) {
     my $id = $c->param('delete_id');
     my $f = find_filter($id) or return $c->redirect_to('/');
     stop_filter($id);
-    @filters = grep { $_->{id} != $id } @filters;
+    with_filters_lock(sub {
+        @filters = grep { $_->{id} != $id } @filters;
+    });
     %edit_filter = () if $edit_filter{id} && $edit_filter{id} == $id;
-    save_state();
     $c->flash(message => "Filter '$f->{name}' deleted");
     $c->redirect_to('/');
 } => 'delete';
