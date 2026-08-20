@@ -37,9 +37,9 @@
               </select>
             </div>
             <button type="submit" formaction="<%= url_for('load_set') %>" class="btn btn-outline-primary" <%= @$saved_sets ? '' : 'disabled' %>
-                    onclick="return confirm('Replace the current filter list with this saved set?');">Load</button>
+              onclick="return confirm('Replace the current filter list with this saved set?');">Load</button>
             <button type="submit" formaction="<%= url_for('delete_set') %>" class="btn btn-outline-danger" <%= @$saved_sets ? '' : 'disabled' %>
-                    onclick="return confirm('Delete this saved set? This can\'t be undone.');">Delete</button>
+              onclick="return confirm('Delete this saved set? This can\'t be undone.');">Delete</button>
           </form>
         </div>
       </div>
@@ -59,7 +59,7 @@
       <form method="post" action="<%= url_for('clear_filters') %>" class="d-inline">
         <%= csrf_field %>
         <button type="submit" class="btn btn-outline-secondary btn-sm" <%= @$filters ? '' : 'disabled' %>
-                onclick="return confirm('Delete all configured filters? Running filters will be stopped first. This can\'t be undone.');">Clear All</button>
+          onclick="return confirm('Delete all configured filters? Running filters will be stopped first. This can\'t be undone.');">Clear All</button>
       </form>
     </div>
   </div>
