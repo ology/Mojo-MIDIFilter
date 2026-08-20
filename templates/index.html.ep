@@ -19,11 +19,11 @@
       </form>
       <form method="post" action="<%= url_for('stop_all') %>" class="d-inline">
         <%= csrf_field %>
-        <button type="submit" class="btn btn-outline-danger btn-sm" <%= @$filters ? '' : 'disabled' %>>Stop All</button>
+        <button type="submit" class="btn btn-outline-dark btn-sm" <%= @$filters ? '' : 'disabled' %>>Stop All</button>
       </form>
       <form method="post" action="<%= url_for('clear_filters') %>" class="d-inline">
         <%= csrf_field %>
-        <button type="submit" class="btn btn-outline-danger btn-sm" <%= @$filters ? '' : 'disabled' %>
+        <button type="submit" class="btn btn-outline-secondary btn-sm" <%= @$filters ? '' : 'disabled' %>
                 onclick="return confirm('Delete all configured filters? Running filters will be stopped first. This can\'t be undone.');">Clear All</button>
       </form>
     </div>
@@ -40,7 +40,7 @@
               <label class="form-label">Save current filters as</label>
               <input type="text" name="set_name" class="form-control" placeholder="e.g. Live Rig" required>
             </div>
-            <button type="submit" class="btn btn-primary" <%= @$filters ? '' : 'disabled' %>>Save</button>
+            <button type="submit" class="btn btn-outline-primary" <%= @$filters ? '' : 'disabled' %>>Save</button>
           </form>
         </div>
 
