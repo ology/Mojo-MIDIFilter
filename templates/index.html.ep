@@ -162,29 +162,29 @@
                    value="<%= $edit->{trigger} // '' %>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Value</label>
+            <label class="form-label">Value (0–127)</label>
             <input type="number" name="value" class="form-control" min="0" max="127"
                    value="<%= $edit->{value} // '' %>">
           </div>
 
           <div class="col-md-3">
-            <label class="form-label">Initial point</label>
+            <label class="form-label">Initial point (0–127)</label>
             <input type="number" name="initial_point" class="form-control" min="0" max="127"
                    value="<%= $edit->{initial_point} // '' %>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Range bottom</label>
+            <label class="form-label">Range bottom (0–127)</label>
             <input type="number" name="range_bottom" class="form-control" min="0" max="127"
                    value="<%= $edit->{range_bottom} // '' %>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Range top</label>
+            <label class="form-label">Range top (0–127)</label>
             <input type="number" name="range_top" class="form-control" min="0" max="127"
                    value="<%= $edit->{range_top} // '' %>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Range step</label>
-            <input type="number" name="range_step" class="form-control" min="0" max="127"
+            <label class="form-label">Range step (num)</label>
+            <input type="number" name="range_step" class="form-control" min="1" max="127"
                    value="<%= $edit->{range_step} // '' %>">
           </div>
 
@@ -194,12 +194,12 @@
                    value="<%= $edit->{time_step} // '' %>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Step up</label>
+            <label class="form-label">Step up (num)</label>
             <input type="number" name="step_up" class="form-control" min="0" max="127"
                    value="<%= $edit->{step_up} // '' %>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Step down</label>
+            <label class="form-label">Step down (num)</label>
             <input type="number" name="step_down" class="form-control" min="0" max="127"
                    value="<%= $edit->{step_down} // '' %>">
           </div>
