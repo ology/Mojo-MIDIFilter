@@ -289,6 +289,8 @@ hook before_dispatch => sub ($c) {
     load_sets();
 };
 
+$SIG{CHLD} = 'IGNORE';
+
 $SIG{INT} = sub {
     say "\nStopping all filters...";
     _stop_controller($_) for values %controllers;
