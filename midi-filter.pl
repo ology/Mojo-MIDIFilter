@@ -16,6 +16,8 @@ use Fcntl qw(:flock);
 use constant {
     STATE     => 'midi-filter-state.dat',
     STATELOCK => 'midi-filter-state.lock',
+    SETS      => 'midi-filter-sets.dat',
+    SETSLOCK  => 'midi-filter-sets.lock',
     RUNNER    => "$Bin/filter_runner.pl",
 };
 
@@ -33,6 +35,9 @@ use constant FIELDS => qw(
 my @filters;
 my $next_id = 1;
 
+# --- persisted config: named, saved snapshots of @filters ---
+my %saved_sets;
+
 # --- transient, per-process only: PIDs of currently running filters ---
 my %pid_of;
 
@@ -43,6 +48,12 @@ sub load_state () {
     my $state = retrieve(STATE);
     @filters = @{ $state->{filters} // [] };
     $next_id = $state->{next_id} // 1;
+}
+
+sub load_sets () {
+    return unless -e SETS;
+    my $data = retrieve(SETS);
+    %saved_sets = %{ $data // {} };
 }
 
 # Runs $code with an exclusive lock held across the whole
@@ -58,10 +69,24 @@ sub with_filters_lock ($code) {
     close $lock_fh; # releases the lock
 }
 
+# Same pattern as with_filters_lock, but for the saved-sets store
+sub with_sets_lock ($code) {
+    open my $lock_fh, '>', SETSLOCK or die "Can't open @{[SETSLOCK]}: $!\n";
+    flock($lock_fh, LOCK_EX) or die "Can't lock @{[SETSLOCK]}: $!\n";
+
+    load_sets();
+    $code->();
+    save_sets();
+
+    close $lock_fh; # releases the lock
+}
+
 load_state();
+load_sets();
 
 hook before_dispatch => sub ($c) {
     load_state();
+    load_sets();
 };
 
 $SIG{INT} = sub {
@@ -78,6 +103,12 @@ sub save_state () {
     my $tmp = STATE . ".$$.tmp";
     store { filters => \@filters, next_id => $next_id }, $tmp;
     rename $tmp, STATE or warn "Can't replace @{[STATE]}: $!\n";
+}
+
+sub save_sets () {
+    my $tmp = SETS . ".$$.tmp";
+    store \%saved_sets, $tmp;
+    rename $tmp, SETS or warn "Can't replace @{[SETS]}: $!\n";
 }
 
 sub known_output_ports () {
@@ -151,6 +182,7 @@ get '/' => sub ($c) {
         inputs       => known_input_ports(),
         outputs      => known_output_ports(),
         running      => { map { $_->{id} => is_running($_->{id}) } @filters },
+        saved_sets   => [ sort keys %saved_sets ],
     );
     $c->render('index');
 } => 'index';
@@ -266,6 +298,69 @@ post '/stop_all' => sub ($c) {
     $c->flash(message => 'Stopped all filters');
     $c->redirect_to('/');
 } => 'stop_all';
+
+post '/sets/save' => sub ($c) {
+    my $name = $c->param('set_name') // '';
+    $name =~ s/^\s+|\s+$//g;
+
+    if (!length $name) {
+        $c->flash(error => 'Enter a name to save this set of filters');
+        return $c->redirect_to('/');
+    }
+    if (!@filters) {
+        $c->flash(error => 'No filters configured to save');
+        return $c->redirect_to('/');
+    }
+
+    with_sets_lock(sub {
+        # snapshot the current filters, stripped of the per-run 'id'
+        # (a fresh id is assigned to each filter when a set is loaded)
+        $saved_sets{$name} = [
+            map { my %f = %$_; delete $f{id}; \%f } @filters
+        ];
+    });
+
+    $c->flash(message => "Saved set '$name'");
+    $c->redirect_to('/');
+} => 'save_set';
+
+post '/sets/load' => sub ($c) {
+    my $name = $c->param('set_name') // '';
+    my $set  = $saved_sets{$name};
+
+    if (!$set) {
+        $c->flash(error => "No such saved set '$name'");
+        return $c->redirect_to('/');
+    }
+    if (grep { is_running($_->{id}) } @filters) {
+        $c->flash(error => 'Stop all running filters before loading a set');
+        return $c->redirect_to('/');
+    }
+
+    with_filters_lock(sub {
+        @filters = map { { %$_, id => $next_id++ } } @$set;
+    });
+    %edit_filter = (); # ids from any in-progress edit no longer apply
+
+    $c->flash(message => "Loaded set '$name'");
+    $c->redirect_to('/');
+} => 'load_set';
+
+post '/sets/delete' => sub ($c) {
+    my $name = $c->param('set_name') // '';
+
+    if (!$saved_sets{$name}) {
+        $c->flash(error => "No such saved set '$name'");
+        return $c->redirect_to('/');
+    }
+
+    with_sets_lock(sub {
+        delete $saved_sets{$name};
+    });
+
+    $c->flash(message => "Deleted set '$name'");
+    $c->redirect_to('/');
+} => 'delete_set';
 
 plugin Config => { file => 'midi-filter.conf' };
 

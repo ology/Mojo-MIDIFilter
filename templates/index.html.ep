@@ -24,6 +24,59 @@
     </div>
   </div>
 
+  <div class="card mb-4">
+    <div class="card-header">Filter Sets</div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <form method="post" action="<%= url_for('save_set') %>" class="d-flex gap-2 align-items-end">
+            <%= csrf_field %>
+            <div class="flex-grow-1">
+              <label class="form-label">Save current filters as</label>
+              <input type="text" name="set_name" class="form-control" placeholder="e.g. Live Rig" required>
+            </div>
+            <button type="submit" class="btn btn-primary" <%= @$filters ? '' : 'disabled' %>>Save</button>
+          </form>
+        </div>
+
+        <div class="col-md-4">
+          <form method="post" action="<%= url_for('load_set') %>" class="d-flex gap-2 align-items-end">
+            <%= csrf_field %>
+            <div class="flex-grow-1">
+              <label class="form-label">Load a saved set</label>
+              <select name="set_name" class="form-select" <%= @$saved_sets ? '' : 'disabled' %>>
+% for my $name (@$saved_sets) {
+                <option value="<%= $name %>"><%= $name %></option>
+% }
+              </select>
+            </div>
+            <button type="submit" class="btn btn-outline-primary" <%= @$saved_sets ? '' : 'disabled' %>
+                    onclick="return confirm('Replace the current filter list with this saved set?');">Load</button>
+          </form>
+        </div>
+
+        <div class="col-md-4">
+          <form method="post" action="<%= url_for('delete_set') %>" class="d-flex gap-2 align-items-end">
+            <%= csrf_field %>
+            <div class="flex-grow-1">
+              <label class="form-label">Delete a saved set</label>
+              <select name="set_name" class="form-select" <%= @$saved_sets ? '' : 'disabled' %>>
+% for my $name (@$saved_sets) {
+                <option value="<%= $name %>"><%= $name %></option>
+% }
+              </select>
+            </div>
+            <button type="submit" class="btn btn-outline-danger" <%= @$saved_sets ? '' : 'disabled' %>
+                    onclick="return confirm('Delete this saved set? This can\'t be undone.');">Delete</button>
+          </form>
+        </div>
+      </div>
+% if (!@$saved_sets) {
+      <p class="text-muted mt-3 mb-0">No saved sets yet — save your current filter list above.</p>
+% }
+    </div>
+  </div>
+
 % if (!@$filters) {
   <p class="text-muted">No filters configured yet — add one below.</p>
 % } else {
