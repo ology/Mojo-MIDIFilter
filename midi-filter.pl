@@ -299,6 +299,16 @@ post '/stop_all' => sub ($c) {
     $c->redirect_to('/');
 } => 'stop_all';
 
+post '/filters/clear' => sub ($c) {
+    stop_filter($_->{id}) for @filters;
+    with_filters_lock(sub {
+        @filters = ();
+    });
+    %edit_filter = (); # any in-progress edit no longer refers to a real filter
+    $c->flash(message => 'Cleared all filters');
+    $c->redirect_to('/');
+} => 'clear_filters';
+
 post '/sets/save' => sub ($c) {
     my $name = $c->param('set_name') // '';
     $name =~ s/^\s+|\s+$//g;

@@ -21,6 +21,11 @@
         <%= csrf_field %>
         <button type="submit" class="btn btn-outline-danger btn-sm" <%= @$filters ? '' : 'disabled' %>>Stop All</button>
       </form>
+      <form method="post" action="<%= url_for('clear_filters') %>" class="d-inline">
+        <%= csrf_field %>
+        <button type="submit" class="btn btn-outline-danger btn-sm" <%= @$filters ? '' : 'disabled' %>
+                onclick="return confirm('Delete all configured filters? Running filters will be stopped first. This can\'t be undone.');">Clear All</button>
+      </form>
     </div>
   </div>
 
@@ -39,34 +44,20 @@
           </form>
         </div>
 
-        <div class="col-md-4">
+        <div class="col-md-8">
           <form method="post" action="<%= url_for('load_set') %>" class="d-flex gap-2 align-items-end">
             <%= csrf_field %>
             <div class="flex-grow-1">
-              <label class="form-label">Load a saved set</label>
+              <label class="form-label">Saved sets</label>
               <select name="set_name" class="form-select" <%= @$saved_sets ? '' : 'disabled' %>>
 % for my $name (@$saved_sets) {
                 <option value="<%= $name %>"><%= $name %></option>
 % }
               </select>
             </div>
-            <button type="submit" class="btn btn-outline-primary" <%= @$saved_sets ? '' : 'disabled' %>
+            <button type="submit" formaction="<%= url_for('load_set') %>" class="btn btn-outline-primary" <%= @$saved_sets ? '' : 'disabled' %>
                     onclick="return confirm('Replace the current filter list with this saved set?');">Load</button>
-          </form>
-        </div>
-
-        <div class="col-md-4">
-          <form method="post" action="<%= url_for('delete_set') %>" class="d-flex gap-2 align-items-end">
-            <%= csrf_field %>
-            <div class="flex-grow-1">
-              <label class="form-label">Delete a saved set</label>
-              <select name="set_name" class="form-select" <%= @$saved_sets ? '' : 'disabled' %>>
-% for my $name (@$saved_sets) {
-                <option value="<%= $name %>"><%= $name %></option>
-% }
-              </select>
-            </div>
-            <button type="submit" class="btn btn-outline-danger" <%= @$saved_sets ? '' : 'disabled' %>
+            <button type="submit" formaction="<%= url_for('delete_set') %>" class="btn btn-outline-danger" <%= @$saved_sets ? '' : 'disabled' %>
                     onclick="return confirm('Delete this saved set? This can\'t be undone.');">Delete</button>
           </form>
         </div>
