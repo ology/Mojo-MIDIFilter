@@ -3,10 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title><%= stash('title') // 'MBTI' %></title>
+  <title><%= stash('title') // 'MIDI Filter' %></title>
   <link rel="stylesheet" href="/css/bootstrap.min.css">
-  <script src="/js/bootstrap.bundle.min.js"></script>
-  <script src="/js/jquery-3.7.1.min.js"></script>
 </head>
 <body>
 <div class="container py-4">
@@ -26,5 +24,6 @@
 
 </div>
 
+<script src="/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

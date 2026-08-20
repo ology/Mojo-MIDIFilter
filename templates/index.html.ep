@@ -157,7 +157,7 @@
                    value="<%= $edit->{control} // '' %>">
           </div>
           <div class="col-md-3">
-            <label class="form-label">Trigger (note)</label>
+            <label class="form-label">Trigger (CC#)</label>
             <input type="number" name="trigger" class="form-control" min="0" max="127"
                    value="<%= $edit->{trigger} // '' %>">
           </div>
