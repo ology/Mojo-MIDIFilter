@@ -19,9 +19,11 @@
             <%= csrf_field %>
             <div class="flex-grow-1">
               <label class="form-label">Save current filters as</label>
-              <input type="text" name="set_name" class="form-control" placeholder="e.g. Live Rig" required>
+              <input type="text" name="set_name" class="form-control" placeholder="e.g. Live Rig" required
+                title="Name to save the current filter list under">
             </div>
-            <button type="submit" class="btn btn-outline-primary" <%= @$filters ? '' : 'disabled' %>>Save</button>
+            <button type="submit" class="btn btn-outline-primary" <%= @$filters ? '' : 'disabled' %>
+              title="Save the current filter list as a named set">Save</button>
           </form>
         </div>
 
@@ -30,15 +32,18 @@
             <%= csrf_field %>
             <div class="flex-grow-1">
               <label class="form-label">Saved sets</label>
-              <select name="set_name" class="form-select" <%= @$saved_sets ? '' : 'disabled' %>>
+              <select name="set_name" class="form-select" <%= @$saved_sets ? '' : 'disabled' %>
+                title="Choose a saved set to load or delete">
 % for my $name (@$saved_sets) {
                 <option value="<%= $name %>"><%= $name %></option>
 % }
               </select>
             </div>
             <button type="submit" formaction="<%= url_for('load_set') %>" class="btn btn-outline-primary" <%= @$saved_sets ? '' : 'disabled' %>
+              title="Replace the current filter list with the selected saved set"
               onclick="return confirm('Replace the current filter list with this saved set?');">Load</button>
             <button type="submit" formaction="<%= url_for('delete_set') %>" class="btn btn-outline-danger" <%= @$saved_sets ? '' : 'disabled' %>
+              title="Delete the selected saved set"
               onclick="return confirm('Delete this saved set? This can\'t be undone.');">Delete</button>
           </form>
         </div>
@@ -50,15 +55,18 @@
     <div class="card-footer d-flex gap-2">
       <form method="post" action="<%= url_for('start_all') %>" class="d-inline">
         <%= csrf_field %>
-        <button type="submit" class="btn btn-success btn-sm" <%= @$filters ? '' : 'disabled' %>>Start All</button>
+        <button type="submit" class="btn btn-success btn-sm" <%= @$filters ? '' : 'disabled' %>
+          title="Start every configured filter">Start All</button>
       </form>
       <form method="post" action="<%= url_for('stop_all') %>" class="d-inline">
         <%= csrf_field %>
-        <button type="submit" class="btn btn-outline-dark btn-sm" <%= @$filters ? '' : 'disabled' %>>Stop All</button>
+        <button type="submit" class="btn btn-outline-dark btn-sm" <%= @$filters ? '' : 'disabled' %>
+          title="Stop every running filter">Stop All</button>
       </form>
       <form method="post" action="<%= url_for('clear_filters') %>" class="d-inline">
         <%= csrf_field %>
         <button type="submit" class="btn btn-outline-secondary btn-sm" <%= @$filters ? '' : 'disabled' %>
+          title="Delete every configured filter"
           onclick="return confirm('Delete all configured filters? Running filters will be stopped first. This can\'t be undone.');">Clear All</button>
       </form>
     </div>
@@ -104,24 +112,24 @@
               <form method="post" action="<%= url_for('stop') %>" class="d-inline">
                 <%= csrf_field %>
                 <input type="hidden" name="id" value="<%= $f->{id} %>">
-                <button type="submit" class="btn btn-outline-danger">Stop</button>
+                <button type="submit" class="btn btn-outline-danger" title="Stop this filter">Stop</button>
               </form>
 % } else {
               <form method="post" action="<%= url_for('start') %>" class="d-inline">
                 <%= csrf_field %>
                 <input type="hidden" name="id" value="<%= $f->{id} %>">
-                <button type="submit" class="btn btn-outline-success">Start</button>
+                <button type="submit" class="btn btn-outline-success" title="Start this filter">Start</button>
               </form>
               <form method="post" action="<%= url_for('edit') %>" class="d-inline">
                 <%= csrf_field %>
                 <input type="hidden" name="edit_id" value="<%= $f->{id} %>">
-                <button type="submit" class="btn btn-outline-secondary">Edit</button>
+                <button type="submit" class="btn btn-outline-secondary" title="Edit this filter's settings">Edit</button>
               </form>
               <form method="post" action="<%= url_for('delete') %>" class="d-inline"
                     onsubmit="return confirm('Delete this filter?');">
                 <%= csrf_field %>
                 <input type="hidden" name="delete_id" value="<%= $f->{id} %>">
-                <button type="submit" class="btn btn-outline-danger">Delete</button>
+                <button type="submit" class="btn btn-outline-danger" title="Delete this filter">Delete</button>
               </form>
 % }
             </div>
@@ -148,12 +156,13 @@
           <div class="col-md-4">
             <label class="form-label">Name</label>
             <input type="text" name="name" class="form-control"
-                   value="<%= $edit->{name} // '' %>" placeholder="e.g. Mod Wheel Breathe">
+              value="<%= $edit->{name} // '' %>" placeholder="e.g. Mod Wheel Breathe"
+              title="A label to identify this filter">
           </div>
 
           <div class="col-md-4">
             <label class="form-label">Filter type</label>
-            <select name="filter" class="form-select">
+            <select name="filter" class="form-select" title="Which filter algorithm to run">
 % for my $type (@$filter_types) {
               <option value="<%= $type %>" <%= ($edit->{filter} // 'breathe') eq $type ? 'selected' : '' %>><%= $type %></option>
 % }
@@ -163,14 +172,16 @@
           <div class="col-md-4">
             <div class="form-check mt-4 pt-2">
               <input type="checkbox" class="form-check-input" id="verbose" name="verbose" value="1"
-                     <%= $edit->{verbose} ? 'checked' : '' %>>
+                title="Log extra detail while this filter runs"
+                <%= $edit->{verbose} ? 'checked' : '' %>>
               <label class="form-check-label" for="verbose">Verbose</label>
             </div>
           </div>
 
           <div class="col-md-6">
             <label class="form-label">Input port</label>
-            <select id="input-ports" name="input" class="form-select" list="input-ports">
+            <select id="input-ports" name="input" class="form-select" list="input-ports"
+              title="MIDI input device to listen on">
 % for my $p (@$inputs) {
               <option value="<%= $p %>" <%= $edit->{input} && $edit->{input} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
@@ -179,7 +190,8 @@
 
           <div class="col-md-6">
             <label class="form-label">Output port</label>
-            <select id="output-ports" name="output" class="form-select" list="output-ports">
+            <select id="output-ports" name="output" class="form-select" list="output-ports"
+              title="MIDI output device to send to">
 % for my $p (@$outputs) {
               <option value="<%= $p %>" <%= $edit->{output} && $edit->{output} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
@@ -189,64 +201,65 @@
           <div class="col-md-3">
             <label class="form-label">Channel (0–15)</label>
             <input type="number" name="channel" class="form-control" min="0" max="15"
-                   value="<%= $edit->{channel} // '' %>">
+              value="<%= $edit->{channel} // '' %>" title="MIDI channel!">
           </div>
           <div class="col-md-3">
             <label class="form-label">Control (CC#)</label>
             <input type="number" name="control" class="form-control" min="0" max="127"
-                   value="<%= $edit->{control} // '' %>">
+              value="<%= $edit->{control} // '' %>" title="Control-change number (CC#) this filter controls">
           </div>
           <div class="col-md-3">
             <label class="form-label">Trigger (CC#)</label>
             <input type="number" name="trigger" class="form-control" min="0" max="127"
-                   value="<%= $edit->{trigger} // '' %>">
+              value="<%= $edit->{trigger} // '' %>" title="Note or CC# that is triggered by this filter">
           </div>
           <div class="col-md-3">
             <label class="form-label">Value (0–127)</label>
             <input type="number" name="value" class="form-control" min="0" max="127"
-                   value="<%= $edit->{value} // '' %>">
+              value="<%= $edit->{value} // '' %>" title="Control-change value of this filter">
           </div>
 
           <div class="col-md-3">
             <label class="form-label">Initial point (0–127)</label>
             <input type="number" name="initial_point" class="form-control" min="0" max="127"
-                   value="<%= $edit->{initial_point} // '' %>">
+              value="<%= $edit->{initial_point} // '' %>" title="Starting value before the filter begins iterating">
           </div>
           <div class="col-md-3">
             <label class="form-label">Range bottom (0–127)</label>
             <input type="number" name="range_bottom" class="form-control" min="0" max="127"
-                   value="<%= $edit->{range_bottom} // '' %>">
+              value="<%= $edit->{range_bottom} // '' %>" title="Lowest value in the filter's range">
           </div>
           <div class="col-md-3">
             <label class="form-label">Range top (0–127)</label>
             <input type="number" name="range_top" class="form-control" min="0" max="127"
-                   value="<%= $edit->{range_top} // '' %>">
+              value="<%= $edit->{range_top} // '' %>" title="Highest value in the filter's range">
           </div>
           <div class="col-md-3">
             <label class="form-label">Range step (num)</label>
             <input type="number" name="range_step" class="form-control" min="1" max="127"
-                   value="<%= $edit->{range_step} // '' %>">
+              value="<%= $edit->{range_step} // '' %>" title="Amount to step by within the range">
           </div>
 
           <div class="col-md-3">
             <label class="form-label">Time step (sec)</label>
             <input type="number" name="time_step" class="form-control" step="0.01" min="0"
-                   value="<%= $edit->{time_step} // '' %>">
+              value="<%= $edit->{time_step} // '' %>" title="Seconds between each iteration">
           </div>
           <div class="col-md-3">
             <label class="form-label">Step up (num)</label>
             <input type="number" name="step_up" class="form-control" min="0" max="127"
-                   value="<%= $edit->{step_up} // '' %>">
+              value="<%= $edit->{step_up} // '' %>" title="Amount to increase by on an upward step">
           </div>
           <div class="col-md-3">
             <label class="form-label">Step down (num)</label>
             <input type="number" name="step_down" class="form-control" min="0" max="127"
-                   value="<%= $edit->{step_down} // '' %>">
+              value="<%= $edit->{step_down} // '' %>" title="Amount to decrease by on a downward step">
           </div>
         </div>
 
         <div class="mt-4">
-          <button type="submit" class="btn btn-primary">
+          <button type="submit" class="btn btn-primary"
+            title="<%= keys %$edit ? 'Save changes to this filter' : 'Add this filter to the configured list' %>">
             <%= keys %$edit ? 'Save Changes' : 'Add Filter' %>
           </button>
 % if (keys %$edit) {
