@@ -1,16 +1,26 @@
 #!/usr/bin/env perl
 
 # A control panel for running any number of MIDI::RtController::Filter::CC
-# filters concurrently.
+# filters concurrently -- IN-PROCESS, using MIDI::RtController's own
+# multi-filter support (see continuous.pl), rather than forking a separate
+# OS process per filter. Filters that share an (input, output) port pair
+# are attached to one shared MIDI::RtController instance via add_filters.
+#
+# IMPORTANT: because all MIDI I/O now lives inside this single process's
+# event loop, this app MUST run with exactly one hypnotoad worker
+# (workers => 1 in midi-filter.conf). Multiple workers would each try to
+# open the same MIDI ports independently and process every event N times.
 
 use v5.36;
 use feature qw(try);
 no warnings qw(experimental::try);
 
 use Mojolicious::Lite -signatures;
+use Mojo::IOLoop ();
 use MIDI::RtMidi::FFI::Device ();
+use MIDI::RtController ();
+use MIDI::RtController::Filter::CC ();
 use Storable qw(retrieve store);
-use FindBin qw($Bin);
 use Fcntl qw(:flock);
 
 use constant {
@@ -18,7 +28,6 @@ use constant {
     STATELOCK => 'midi-filter-state.lock',
     SETS      => 'midi-filter-sets.dat',
     SETSLOCK  => 'midi-filter-sets.lock',
-    RUNNER    => "$Bin/filter_runner.pl",
 };
 
 use constant FILTER_TYPES => qw(
@@ -31,6 +40,9 @@ use constant FIELDS => qw(
     step_up step_down verbose
 );
 
+# how often (seconds) to pump each live MIDI::RtController's event loop
+use constant PUMP_INTERVAL => 0.005;
+
 # --- persisted config: the list of configured filters (survives restarts) ---
 my @filters;
 my $next_id = 1;
@@ -38,16 +50,23 @@ my $next_id = 1;
 # --- persisted config: named, saved snapshots of @filters ---
 my %saved_sets;
 
-# --- transient, per-process only: PIDs of currently running filters ---
-my %pid_of;
+# --- persisted: which filter ids should currently be running. Since
+# starting/stopping no longer spawns/kills an OS process, it's safe (and
+# useful) to persist this: a restarted server reattaches automatically. ---
+my %running_ids;
+
+# --- transient, per-process only: live MIDI::RtController instances,
+# keyed by "$input\0$output" ---
+my %controllers;
 
 my %edit_filter; # single record being edited, mirrors phrase-generator's %edit_part
 
 sub load_state () {
     return unless -e STATE;
     my $state = retrieve(STATE);
-    @filters = @{ $state->{filters} // [] };
-    $next_id = $state->{next_id} // 1;
+    @filters     = @{ $state->{filters} // [] };
+    $next_id     = $state->{next_id} // 1;
+    %running_ids = %{ $state->{running} // {} };
 }
 
 sub load_sets () {
@@ -81,27 +100,9 @@ sub with_sets_lock ($code) {
     close $lock_fh; # releases the lock
 }
 
-load_state();
-load_sets();
-
-hook before_dispatch => sub ($c) {
-    load_state();
-    load_sets();
-};
-
-$SIG{INT} = sub {
-    say "\nStopping all filters...";
-    stop_filter($_->{id}) for @filters;
-    exit;
-};
-
-END {
-    stop_filter($_->{id}) for @filters;
-}
-
 sub save_state () {
     my $tmp = STATE . ".$$.tmp";
-    store { filters => \@filters, next_id => $next_id }, $tmp;
+    store { filters => \@filters, next_id => $next_id, running => \%running_ids }, $tmp;
     rename $tmp, STATE or warn "Can't replace @{[STATE]}: $!\n";
 }
 
@@ -132,47 +133,175 @@ sub find_filter ($id) {
 }
 
 sub is_running ($id) {
-    my $pid = $pid_of{$id} or return 0;
-    return kill(0, $pid) ? 1 : 0;
+    return $running_ids{$id} ? 1 : 0;
+}
+
+sub _port_key ($f) {
+    return "$f->{input}\0$f->{output}";
+}
+
+# The library's own shutdown signal (see halt.pl): stopping a
+# controller's loop is presumably what lets MIDI::RtController clean up
+# its internal worker process in an orderly way, as it would when a
+# blocking ->run() call returns naturally. We never call ->run()
+# ourselves (we pump loop_once() instead), so we call this explicitly
+# before discarding each controller.
+sub _stop_controller ($controller) {
+    eval { $controller->loop->loop_stop };
+}
+
+# MIDI::RtController spawns its blocking read loop (_rtmidi_loop) as a
+# genuine child OS process, internally, on every ->new -- this isn't
+# something our code controls. Simply dropping our reference to a
+# $controller object (letting it fall out of scope) does NOT reliably
+# terminate that worker; something continues to keep it alive. Until/
+# unless MIDI::RtController exposes an explicit shutdown method, we
+# reap these ourselves: find our own process's direct children whose
+# command line mentions _rtmidi_loop, and kill them.
+sub _kill_stray_workers () {
+    open my $fh, '-|', 'pgrep', '-P', $$ or return;
+    chomp(my @kids = <$fh>);
+    close $fh;
+    return unless @kids;
+
+    my @workers;
+    for my $pid (@kids) {
+        open my $cmd_fh, '-|', 'ps', '-o', 'command=', '-p', $pid or next;
+        my $cmdline = <$cmd_fh> // '';
+        close $cmd_fh;
+        push @workers, $pid if $cmdline =~ /_rtmidi_loop/;
+    }
+    return unless @workers;
+
+    kill('TERM', @workers);
+    for (1 .. 20) { # give them up to ~1s to exit cleanly
+        last unless grep { kill(0, $_) } @workers;
+        select(undef, undef, undef, 0.05);
+    }
+    kill('KILL', grep { kill(0, $_) } @workers);
+}
+
+sub _filter_spec ($f, $input) {
+    my %spec = (
+        port  => $input,
+        type  => $f->{filter} || 'single',
+        event => 'all',
+    );
+    for my $field (qw(channel control trigger value initial_point
+                       range_bottom range_top range_step time_step
+                       step_up step_down)) {
+        $spec{$field} = $f->{$field} if defined $f->{$field} && length $f->{$field};
+    }
+    return \%spec;
+}
+
+# Rebuilds %controllers from scratch to match the current %running_ids /
+# @filters. Filters sharing an (input, output) pair share one controller,
+# attached via MIDI::RtController::Filter::CC::add_filters (same mechanism
+# as continuous.pl). Returns %errors (filter id => message) for any
+# port-group that failed to start; does NOT itself touch %running_ids --
+# callers decide whether/how to reconcile and persist that.
+sub rebuild_controllers () {
+    _stop_controller($_) for values %controllers; # ask nicely first
+    %controllers = (); # drop old connections
+    _kill_stray_workers(); # ...then make sure their worker processes actually die
+
+    my %by_key;
+    for my $f (@filters) {
+        next unless $running_ids{ $f->{id} };
+        push @{ $by_key{ _port_key($f) } }, $f;
+    }
+
+    my %errors;
+    for my $key (keys %by_key) {
+        my @group = @{ $by_key{$key} };
+        my ($input, $output) = split /\0/, $key, 2;
+        my $verbose = (grep { $_->{verbose} } @group) ? 1 : 0;
+
+        my $controller = eval {
+            MIDI::RtController->new(input => $input, output => $output, verbose => $verbose);
+        };
+        if (!$controller) {
+            my $err = $@ || 'Unknown error';
+            $errors{ $_->{id} } = "Can't open '$input' -> '$output': $err" for @group;
+            next;
+        }
+
+        my @specs = map { _filter_spec($_, $input) } @group;
+        eval {
+            MIDI::RtController::Filter::CC::add_filters(\@specs, { $input => $controller });
+        };
+        if ($@) {
+            $errors{ $_->{id} } = "Can't configure filter: $@" for @group;
+            next;
+        }
+
+        $controllers{$key} = $controller;
+    }
+
+    return %errors;
 }
 
 sub start_filter ($id) {
     my $f = find_filter($id) or die "No such filter\n";
     return if is_running($id);
 
-    my @cmd = ($^X, RUNNER);
-    for my $field (qw(input output filter channel control trigger value
-                       initial_point range_bottom range_top range_step
-                       time_step step_up step_down)) {
-        push @cmd, "--$field=$f->{$field}" if defined $f->{$field} && length $f->{$field};
+    with_filters_lock(sub { $running_ids{$id} = 1 });
+    my %errors = rebuild_controllers();
+
+    if (my $err = $errors{$id}) {
+        with_filters_lock(sub { delete $running_ids{$id} });
+        rebuild_controllers(); # drop the broken attempt from live state too
+        die "$err\n";
     }
-    push @cmd, '--verbose' if $f->{verbose};
-
-    my $pid = fork();
-    die "Can't fork: $!\n" unless defined $pid;
-
-    if ($pid == 0) {
-        # child
-        exec(@cmd) or die "Can't exec @cmd: $!\n";
-        exit 1;
-    }
-
-    $pid_of{$id} = $pid;
 }
 
 sub stop_filter ($id) {
-    my $pid = delete $pid_of{$id} or return;
-    return unless kill(0, $pid);
-    kill('TERM', $pid);
-    for (1 .. 20) { # give it up to ~1s to exit cleanly
-        last unless kill(0, $pid);
-        select(undef, undef, undef, 0.05);
-    }
-    kill('KILL', $pid) if kill(0, $pid);
+    return unless is_running($id);
+    with_filters_lock(sub { delete $running_ids{$id} });
+    rebuild_controllers();
 }
 
-# reap children so they don't linger as zombies
-$SIG{CHLD} = 'IGNORE';
+# Pump every live controller's event loop non-blockingly, inside
+# Mojolicious's own reactor -- no threads, no forks, one process.
+Mojo::IOLoop->recurring(PUMP_INTERVAL, sub {
+    for my $key (keys %controllers) {
+        my $c = $controllers{$key};
+        eval { $c->loop->loop_once(0) };
+        if ($@) {
+            warn "MIDI controller for '$key' failed: $@";
+            with_filters_lock(sub {
+                for my $f (@filters) {
+                    delete $running_ids{ $f->{id} } if _port_key($f) eq $key;
+                }
+            });
+            rebuild_controllers(); # rebuilds everything cleanly from corrected state
+        }
+    }
+});
+
+load_state();
+load_sets();
+rebuild_controllers(); # reattach anything that was running before a restart
+
+hook before_dispatch => sub ($c) {
+    load_state();
+    load_sets();
+};
+
+$SIG{INT} = sub {
+    say "\nStopping all filters...";
+    _stop_controller($_) for values %controllers;
+    %controllers = ();
+    _kill_stray_workers();
+    exit;
+};
+
+END {
+    _stop_controller($_) for values %controllers;
+    %controllers = ();
+    _kill_stray_workers();
+}
 
 get '/' => sub ($c) {
     $c->stash(
@@ -252,10 +381,11 @@ get '/cancel' => sub ($c) {
 post '/delete' => sub ($c) {
     my $id = $c->param('delete_id');
     my $f = find_filter($id) or return $c->redirect_to('/');
-    stop_filter($id);
     with_filters_lock(sub {
+        delete $running_ids{$id};
         @filters = grep { $_->{id} != $id } @filters;
     });
+    rebuild_controllers();
     %edit_filter = () if $edit_filter{id} && $edit_filter{id} == $id;
     $c->flash(message => "Filter '$f->{name}' deleted");
     $c->redirect_to('/');
@@ -283,27 +413,38 @@ post '/stop' => sub ($c) {
 } => 'stop';
 
 post '/start_all' => sub ($c) {
-    my @failed;
-    for my $f (@filters) {
-        try { start_filter($f->{id}) }
-        catch ($e) { push @failed, $f->{name} }
+    with_filters_lock(sub {
+        $running_ids{ $_->{id} } = 1 for @filters;
+    });
+    my %errors = rebuild_controllers();
+
+    if (%errors) {
+        with_filters_lock(sub {
+            delete $running_ids{$_} for keys %errors;
+        });
+        rebuild_controllers();
+        my @failed = map { (find_filter($_) // {})->{name} // $_ } keys %errors;
+        $c->flash(error => 'Failed to start: ' . join(', ', @failed));
     }
-    $c->flash(error => 'Failed to start: ' . join(', ', @failed)) if @failed;
-    $c->flash(message => 'Started all filters') unless @failed;
+    else {
+        $c->flash(message => 'Started all filters');
+    }
     $c->redirect_to('/');
 } => 'start_all';
 
 post '/stop_all' => sub ($c) {
-    stop_filter($_->{id}) for @filters;
+    with_filters_lock(sub { %running_ids = () });
+    rebuild_controllers();
     $c->flash(message => 'Stopped all filters');
     $c->redirect_to('/');
 } => 'stop_all';
 
 post '/filters/clear' => sub ($c) {
-    stop_filter($_->{id}) for @filters;
     with_filters_lock(sub {
+        %running_ids = ();
         @filters = ();
     });
+    rebuild_controllers();
     %edit_filter = (); # any in-progress edit no longer refers to a real filter
     $c->flash(message => 'Cleared all filters');
     $c->redirect_to('/');
