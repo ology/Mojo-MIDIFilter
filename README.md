@@ -23,6 +23,6 @@ morbo midi-filter.pl --verbose --listen http://127.0.0.1:3333
 hypnotoad midi-filter.pl
 ```
 
-Browse to http://127.0.0.1:3333/
+Browse to http://127.0.0.1:3333/ or wherever hypnotoad is configured for.
 
 Voila! :D
