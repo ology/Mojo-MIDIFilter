@@ -173,7 +173,7 @@
             <label class="form-label">Input port</label>
             <select id="input-ports" name="input" class="form-select" list="input-ports" required
               title="MIDI input device to listen on">
-              <option value="" disabled <%= $edit->{input} ? '' : 'selected' %>>-- choose input --</option>
+              <option value="" disabled <%= $edit->{input} ? '' : 'selected' %>>Choose input...</option>
 % for my $p (@$inputs) {
               <option value="<%= $p %>" <%= $edit->{input} && $edit->{input} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
@@ -184,7 +184,7 @@
             <label class="form-label">Output port</label>
             <select id="output-ports" name="output" class="form-select" list="output-ports" required
               title="MIDI output device to send to">
-              <option value="" disabled <%= $edit->{output} ? '' : 'selected' %>>-- choose output --</option>
+              <option value="" disabled <%= $edit->{output} ? '' : 'selected' %>>Choose output...</option>
 % for my $p (@$outputs) {
               <option value="<%= $p %>" <%= $edit->{output} && $edit->{output} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
