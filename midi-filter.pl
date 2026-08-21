@@ -581,5 +581,5 @@ my $log = Mojo::Log->new(
   level => app->config->{log_level},
 );
 app->log($log);
-app->log->info("PATH is: $ENV{PATH}");
+
 app->start;
