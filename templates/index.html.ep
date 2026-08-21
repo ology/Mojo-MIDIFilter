@@ -44,7 +44,8 @@
               <%= (@$saved_sets && !$any_running && defined $current_set && length $current_set) ? '' : 'disabled' %>
               title="Replace the current filter list with the selected saved set"
               onclick="return confirm('Replace the current filter list with this saved set?');">Load</button>
-            <button type="submit" formaction="<%= url_for('delete_set') %>" class="btn btn-outline-danger" <%= (@$saved_sets && !$any_running) ? '' : 'disabled' %>
+            <button type="submit" id="delete-set-btn" formaction="<%= url_for('delete_set') %>" class="btn btn-outline-danger"
+              <%= (@$saved_sets && !$any_running && defined $current_set && length $current_set) ? '' : 'disabled' %>
               title="Delete the selected saved set"
               onclick="return confirm('Delete this saved set? This can\'t be undone.');">Delete</button>
           </form>
@@ -271,13 +272,16 @@
   (function () {
     var select = document.getElementById('saved-set-select');
     var loadBtn = document.getElementById('load-set-btn');
-    if (!select || !loadBtn) return;
+    var deleteBtn = document.getElementById('delete-set-btn');
+    if (!select || !loadBtn || !deleteBtn) return;
 
     select.addEventListener('change', function () {
       // Respect the select's own disabled state (set server-side when
       // filters are running or there are no saved sets) — only toggle
-      // the Load button based on selection when the select is usable.
-      loadBtn.disabled = select.disabled || select.value === '';
+      // Load/Delete based on selection when the select is usable.
+      var shouldDisable = select.disabled || select.value === '';
+      loadBtn.disabled = shouldDisable;
+      deleteBtn.disabled = shouldDisable;
     });
   })();
 </script>
