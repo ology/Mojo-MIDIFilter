@@ -136,47 +136,18 @@ sub _port_key ($f) {
     return "$f->{input}\0$f->{output}";
 }
 
-# Direct child PIDs of this process, straight from the OS.
+# Find your old _direct_children function and replace it completely:
 sub _direct_children () {
-    open my $fh, '-|', 'pgrep', '-P', $$ or do {
-        app->log->info("pgrep failed to run: $!");
+    # Using 'ps -U <current_user>' grabs all tasks run by you on macOS
+    my $user = $ENV{USER} || 'gene';
+    open my $fh, '-|', 'ps', '-U', $user, '-o', 'pid=' or do {
+        app->log->info("ps query failed to run: $!");
         return ();
     };
     chomp(my @kids = <$fh>);
     close $fh;
-    return @kids;
-}
-
-# Kill the specific, explicitly-tracked worker PID for $key, logging
-# every step so we can see exactly what happened instead of guessing.
-sub _stop_worker ($key) {
-    my $pid = delete $worker_pid{$key} or return;
-
-    unless (kill(0, $pid)) {
-        app->log->info("Worker PID $pid for '$key' already gone");
-        return;
-    }
-
-    app->log->info("Sending TERM to worker PID $pid for '$key'");
-    kill('TERM', $pid);
-    for (1 .. 20) { # give it up to ~1s to exit cleanly
-        last unless kill(0, $pid);
-        select(undef, undef, undef, 0.05);
-    }
-
-    if (kill(0, $pid)) {
-        app->log->info("Worker PID $pid for '$key' still alive after TERM, sending KILL");
-        kill('KILL', $pid);
-        select(undef, undef, undef, 0.1);
-        app->log->info(
-            kill(0, $pid)
-                ? "Worker PID $pid for '$key' STILL ALIVE after KILL"
-                : "Worker PID $pid for '$key' confirmed dead (after KILL)"
-        );
-    }
-    else {
-        app->log->info("Worker PID $pid for '$key' confirmed dead (after TERM)");
-    }
+    # Clean up whitespace padding from the process list
+    return map { s/^\s+|\s+$//g; $_ } @kids;
 }
 
 sub _stop_controller ($key) {
@@ -186,31 +157,63 @@ sub _stop_controller ($key) {
     _stop_worker($key);
 }
 
-# Last-resort safety net: kill any child of this process whose command
-# line still mentions _rtmidi_loop, regardless of whether we managed to
-# track it in %worker_pid. Logged, so if this ever actually fires we'll
-# know our targeted tracking above missed something.
-sub _kill_stray_workers () {
-    my @workers;
-    for my $pid (_direct_children()) {
-        open my $cmd_fh, '-|', 'ps', '-o', 'command=', '-p', $pid or next;
-        my $cmdline = <$cmd_fh> // '';
-        close $cmd_fh;
-        push @workers, $pid if $cmdline =~ /_rtmidi_loop/;
-    }
-    app->log->info("_kill_stray_workers: found " . scalar(@workers) . " candidate(s)");
-    return unless @workers;
+# --- Replace these two functions in your script ---
 
-    app->log->info("Stray workers found (untracked by %worker_pid): @workers");
-    kill('TERM', @workers);
-    for (1 .. 20) {
-        last unless grep { kill(0, $_) } @workers;
+sub _stop_worker ($key) {
+    my $pid = delete $worker_pid{$key} or return;
+
+    app->log->info("Targeted cleanup: Sending TERM to worker PID $pid for '$key'");
+    
+    # Send TERM to the process group if possible, or the process directly
+    kill('TERM', $pid);
+    
+    # Wait explicitly for this child using non-blocking waitpid
+    for (1 .. 20) { 
+        my $res = waitpid($pid, 1); # WNOHANG = 1
+        last if $res == $pid || $res == -1;
         select(undef, undef, undef, 0.05);
     }
-    my @survivors = grep { kill(0, $_) } @workers;
-    if (@survivors) {
-        app->log->info("Sending KILL to stray workers: @survivors");
-        kill('KILL', @survivors);
+
+    # Ultimate fallback if it refuses to close
+    if (kill(0, $pid)) {
+        app->log->info("Worker PID $pid stubborn after TERM. Escalating to KILL.");
+        kill('KILL', $pid);
+        waitpid($pid, 0); # Block briefly to guarantee it reaps
+    }
+}
+
+sub _kill_stray_workers () {
+    my @all_pids = _direct_children();
+    
+    my @workers;
+    for my $pid (@all_pids) {
+        next if $pid == $$; # Absolutely skip killing our own Mojolicious server!
+        
+        if (open my $cmd_fh, '-|', 'ps', '-ww', '-o', 'command=', '-p', $pid) {
+            my $cmdline = <$cmd_fh> // '';
+            close $cmd_fh;
+            
+            # Match the exact IO::Async channel setup strings seen in your ps logs
+            if ($cmdline =~ /MIDI::RtController|_rtmidi_loop|IO::Async::Channel/i) {
+                push @workers, $pid;
+            }
+        }
+    }
+    
+    return unless @workers;
+    app->log->info("Killing unlinked asynchronous worker processes: @workers");
+    
+    kill('TERM', @workers);
+    for (1 .. 25) {
+        @workers = grep { kill(0, $_) } @workers;
+        last unless @workers;
+        select(undef, undef, undef, 0.04);
+    }
+    
+    if (@workers) {
+        app->log->info("Forcing absolute KILL on lingering loops: @workers");
+        kill('KILL', @workers);
+        waitpid($_, 1) for @workers;
     }
 }
 
@@ -306,16 +309,26 @@ sub start_filter ($id) {
 }
 
 sub stop_filter ($id) {
+    my $f = find_filter($id) or return;
     return unless is_running($id);
+    
+    my $key = _port_key($f);
     with_filters_lock(sub { delete $running_ids{$id} });
+    
+    # Forcefully shut down and delete the object reference immediately
+    if ($controllers{$key}) {
+        _stop_controller($key);
+        delete $controllers{$key};
+    }
+    
     rebuild_controllers();
 }
 
-# Pump every live controller's event loop non-blockingly, inside
-# Mojolicious's own reactor -- no threads, no forks, one process.
 Mojo::IOLoop->recurring(PUMP_INTERVAL, sub {
     for my $key (keys %controllers) {
-        my $c = $controllers{$key};
+        # Skip if the controller was deleted by a stop action mid-tick
+        my $c = $controllers{$key} or next; 
+        
         eval { $c->loop->loop_once(0) };
         if ($@) {
             warn "MIDI controller for '$key' failed: $@";
@@ -324,7 +337,9 @@ Mojo::IOLoop->recurring(PUMP_INTERVAL, sub {
                     delete $running_ids{ $f->{id} } if _port_key($f) eq $key;
                 }
             });
-            rebuild_controllers(); # rebuilds everything cleanly from corrected state
+            _stop_controller($key);
+            delete $controllers{$key};
+            rebuild_controllers(); 
         }
     }
 });
@@ -338,7 +353,7 @@ hook before_dispatch => sub ($c) {
     load_sets();
 };
 
-$SIG{CHLD} = 'IGNORE';
+$SIG{CHLD} = 'DEFAULT';
 
 $SIG{INT} = sub {
     say "\nStopping all filters...";
@@ -458,7 +473,15 @@ post '/start' => sub ($c) {
 post '/stop' => sub ($c) {
     my $id = $c->param('id');
     my $f = find_filter($id) or return $c->redirect_to('/');
+    
     stop_filter($id);
+    
+    # Extra safety net: fully purge the port key reference
+    delete $controllers{_port_key($f)};
+
+    # Force an instant system sweep of unlinked IO::Async children
+    _kill_stray_workers();
+
     $c->flash(message => "Filter '$f->{name}' stopped");
     $c->redirect_to('/');
 } => 'stop';
@@ -485,7 +508,16 @@ post '/start_all' => sub ($c) {
 
 post '/stop_all' => sub ($c) {
     with_filters_lock(sub { %running_ids = () });
+    
+    # Stop every individual controller instance explicitly 
+    for my $key (keys %controllers) {
+        _stop_controller($key);
+        delete $controllers{$key};
+    }
+    
+    %controllers = ();
     rebuild_controllers();
+    
     $c->flash(message => 'Stopped all filters');
     $c->redirect_to('/');
 } => 'stop_all';
