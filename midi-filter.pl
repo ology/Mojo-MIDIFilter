@@ -59,6 +59,13 @@ my %running_ids;
 # keyed by "$input\0$output" ---
 my %controllers;
 
+# --- transient, per-process only: the OS PID of each controller's
+# spawned _rtmidi_loop worker, same keys as %controllers. Captured
+# explicitly at spawn time (see rebuild_controllers) rather than
+# discovered later by scanning, so we always know exactly which PID
+# corresponds to which controller. ---
+my %worker_pid;
+
 my %edit_filter; # single record being edited, mirrors phrase-generator's %edit_part
 
 sub load_state () {
@@ -140,45 +147,82 @@ sub _port_key ($f) {
     return "$f->{input}\0$f->{output}";
 }
 
-# The library's own shutdown signal (see halt.pl): stopping a
-# controller's loop is presumably what lets MIDI::RtController clean up
-# its internal worker process in an orderly way, as it would when a
-# blocking ->run() call returns naturally. We never call ->run()
-# ourselves (we pump loop_once() instead), so we call this explicitly
-# before discarding each controller.
-sub _stop_controller ($controller) {
-    eval { $controller->loop->loop_stop };
-}
-
-# MIDI::RtController spawns its blocking read loop (_rtmidi_loop) as a
-# genuine child OS process, internally, on every ->new -- this isn't
-# something our code controls. Simply dropping our reference to a
-# $controller object (letting it fall out of scope) does NOT reliably
-# terminate that worker; something continues to keep it alive. Until/
-# unless MIDI::RtController exposes an explicit shutdown method, we
-# reap these ourselves: find our own process's direct children whose
-# command line mentions _rtmidi_loop, and kill them.
-sub _kill_stray_workers () {
-    open my $fh, '-|', 'pgrep', '-P', $$ or return;
+# Direct child PIDs of this process, straight from the OS.
+sub _direct_children () {
+    open my $fh, '-|', 'pgrep', '-P', $$ or do {
+        app->log->info("pgrep failed to run: $!");
+        return ();
+    };
     chomp(my @kids = <$fh>);
     close $fh;
-    return unless @kids;
+    return @kids;
+}
 
+# Kill the specific, explicitly-tracked worker PID for $key, logging
+# every step so we can see exactly what happened instead of guessing.
+sub _stop_worker ($key) {
+    my $pid = delete $worker_pid{$key} or return;
+
+    unless (kill(0, $pid)) {
+        app->log->info("Worker PID $pid for '$key' already gone");
+        return;
+    }
+
+    app->log->info("Sending TERM to worker PID $pid for '$key'");
+    kill('TERM', $pid);
+    for (1 .. 20) { # give it up to ~1s to exit cleanly
+        last unless kill(0, $pid);
+        select(undef, undef, undef, 0.05);
+    }
+
+    if (kill(0, $pid)) {
+        app->log->info("Worker PID $pid for '$key' still alive after TERM, sending KILL");
+        kill('KILL', $pid);
+        select(undef, undef, undef, 0.1);
+        app->log->info(
+            kill(0, $pid)
+                ? "Worker PID $pid for '$key' STILL ALIVE after KILL"
+                : "Worker PID $pid for '$key' confirmed dead (after KILL)"
+        );
+    }
+    else {
+        app->log->info("Worker PID $pid for '$key' confirmed dead (after TERM)");
+    }
+}
+
+sub _stop_controller ($key) {
+    my $controller = $controllers{$key} or return;
+    eval { $controller->stop };
+    app->log->info("controller->stop failed for '$key': $@") if $@;
+    _stop_worker($key);
+}
+
+# Last-resort safety net: kill any child of this process whose command
+# line still mentions _rtmidi_loop, regardless of whether we managed to
+# track it in %worker_pid. Logged, so if this ever actually fires we'll
+# know our targeted tracking above missed something.
+sub _kill_stray_workers () {
     my @workers;
-    for my $pid (@kids) {
+    for my $pid (_direct_children()) {
         open my $cmd_fh, '-|', 'ps', '-o', 'command=', '-p', $pid or next;
         my $cmdline = <$cmd_fh> // '';
         close $cmd_fh;
         push @workers, $pid if $cmdline =~ /_rtmidi_loop/;
     }
+    app->log->info("_kill_stray_workers: found " . scalar(@workers) . " candidate(s)");
     return unless @workers;
 
+    app->log->info("Stray workers found (untracked by %worker_pid): @workers");
     kill('TERM', @workers);
-    for (1 .. 20) { # give them up to ~1s to exit cleanly
+    for (1 .. 20) {
         last unless grep { kill(0, $_) } @workers;
         select(undef, undef, undef, 0.05);
     }
-    kill('KILL', grep { kill(0, $_) } @workers);
+    my @survivors = grep { kill(0, $_) } @workers;
+    if (@survivors) {
+        app->log->info("Sending KILL to stray workers: @survivors");
+        kill('KILL', @survivors);
+    }
 }
 
 sub _filter_spec ($f, $input) {
@@ -195,16 +239,11 @@ sub _filter_spec ($f, $input) {
     return \%spec;
 }
 
-# Rebuilds %controllers from scratch to match the current %running_ids /
-# @filters. Filters sharing an (input, output) pair share one controller,
-# attached via MIDI::RtController::Filter::CC::add_filters (same mechanism
-# as continuous.pl). Returns %errors (filter id => message) for any
-# port-group that failed to start; does NOT itself touch %running_ids --
-# callers decide whether/how to reconcile and persist that.
 sub rebuild_controllers () {
-    _stop_controller($_) for values %controllers; # ask nicely first
-    %controllers = (); # drop old connections
-    _kill_stray_workers(); # ...then make sure their worker processes actually die
+    app->log->info("rebuild_controllers: stopping " . scalar(keys %controllers) . " existing controller(s)");
+    _stop_controller($_) for keys %controllers;
+    %controllers = ();
+    _kill_stray_workers(); # catch anything our tracking missed
 
     my %by_key;
     for my $f (@filters) {
@@ -218,6 +257,7 @@ sub rebuild_controllers () {
         my ($input, $output) = split /\0/, $key, 2;
         my $verbose = (grep { $_->{verbose} } @group) ? 1 : 0;
 
+        my %before = map { $_ => 1 } _direct_children();
         my $controller = eval {
             MIDI::RtController->new(input => $input, output => $output, verbose => $verbose);
         };
@@ -225,6 +265,25 @@ sub rebuild_controllers () {
             my $err = $@ || 'Unknown error';
             $errors{ $_->{id} } = "Can't open '$input' -> '$output': $err" for @group;
             next;
+        }
+
+        # The worker process isn't spawned synchronously inside ->new --
+        # it's deferred until the controller's own loop first ticks. Pump
+        # it here (up to ~1s) so the spawn actually happens before we try
+        # to capture its PID by diffing our child-process list.
+        my $new_pid;
+        for (1 .. 20) {
+            eval { $controller->loop->loop_once(0) };
+            ($new_pid) = grep { !$before{$_} } _direct_children();
+            last if $new_pid;
+            select(undef, undef, undef, 0.05);
+        }
+        if ($new_pid) {
+            $worker_pid{$key} = $new_pid;
+            app->log->info("Started worker PID $new_pid for '$key'");
+        }
+        else {
+            app->log->info("WARNING: no new worker PID detected for '$key' after construction (waited up to 1s)");
         }
 
         my @specs = map { _filter_spec($_, $input) } @group;
@@ -293,14 +352,14 @@ $SIG{CHLD} = 'IGNORE';
 
 $SIG{INT} = sub {
     say "\nStopping all filters...";
-    _stop_controller($_) for values %controllers;
+    _stop_controller($_) for keys %controllers;
     %controllers = ();
     _kill_stray_workers();
     exit;
 };
 
 END {
-    _stop_controller($_) for values %controllers;
+    _stop_controller($_) for keys %controllers;
     %controllers = ();
     _kill_stray_workers();
 }
@@ -522,5 +581,5 @@ my $log = Mojo::Log->new(
   level => app->config->{log_level},
 );
 app->log($log);
-
+app->log->info("PATH is: $ENV{PATH}");
 app->start;
