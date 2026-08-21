@@ -18,7 +18,9 @@ cpanm --verbose --installdeps .
 
 Run the app:
 ```shell
-morbo phrase-generator.pl --verbose --listen http://127.0.0.1:3333
+morbo midi-filter.pl --verbose --listen http://127.0.0.1:3333
+# or
+hypnotoad midi-filter.pl
 ```
 
 Browse to http://127.0.0.1:3333/
