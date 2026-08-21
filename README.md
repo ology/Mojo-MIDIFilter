@@ -7,8 +7,8 @@ Apply MIDI Filters to Open Ports
 
 Clone the repo and change to that directory:
 ```shell
-git clone https://github.com/ology/Phrase-Generator.git
-cd Phrase-Generator/
+git clone https://github.com/ology/Mojo-MIDIFilter.git
+cd Mojo-MIDIFilter/
 ```
 
 Install the Perl dependencies:
