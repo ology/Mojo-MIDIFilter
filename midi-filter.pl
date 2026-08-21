@@ -2,7 +2,6 @@
 
 use v5.36;
 use feature qw(try);
-no warnings qw(experimental::try);
 
 use Mojolicious::Lite -signatures;
 use Mojo::IOLoop ();
@@ -11,6 +10,8 @@ use MIDI::RtController ();
 use MIDI::RtController::Filter::CC ();
 use Storable qw(retrieve store);
 use Fcntl qw(:flock);
+
+no warnings qw(experimental::try);
 
 use constant {
     STATE     => 'midi-filter-state.dat',
