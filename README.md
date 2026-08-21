@@ -2,3 +2,25 @@
 Apply MIDI Filters to Open Ports
 
 ![UI](MIDIFilter-UI.png)
+
+## Installation
+
+Clone the repo and change to that directory:
+```shell
+git clone https://github.com/ology/Phrase-Generator.git
+cd Phrase-Generator/
+```
+
+Install the Perl dependencies:
+```shell
+cpanm --verbose --installdeps .
+```
+
+Run the app:
+```shell
+morbo phrase-generator.pl --verbose --listen http://127.0.0.1:3333
+```
+
+Browse to http://127.0.0.1:3333/
+
+Voila! :D
