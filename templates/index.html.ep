@@ -146,14 +146,14 @@
         <div class="row g-3">
           <div class="col-md-4">
             <label class="form-label">Name</label>
-            <input type="text" name="name" class="form-control"
+            <input type="text" name="name" class="form-control" required
               value="<%= $edit->{name} // '' %>" placeholder="e.g. Mod Wheel Breathe"
               title="A label to identify this filter">
           </div>
 
           <div class="col-md-4">
             <label class="form-label">Filter type</label>
-            <select name="filter" class="form-select" title="Which filter algorithm to run">
+            <select name="filter" class="form-select" required title="Which filter algorithm to run">
 % for my $type (@$filter_types) {
               <option value="<%= $type %>" <%= ($edit->{filter} // 'single') eq $type ? 'selected' : '' %>><%= $type %></option>
 % }
@@ -171,8 +171,9 @@
 
           <div class="col-md-6">
             <label class="form-label">Input port</label>
-            <select id="input-ports" name="input" class="form-select" list="input-ports"
+            <select id="input-ports" name="input" class="form-select" list="input-ports" required
               title="MIDI input device to listen on">
+              <option value="" disabled <%= $edit->{input} ? '' : 'selected' %>>-- choose input --</option>
 % for my $p (@$inputs) {
               <option value="<%= $p %>" <%= $edit->{input} && $edit->{input} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
@@ -181,8 +182,9 @@
 
           <div class="col-md-6">
             <label class="form-label">Output port</label>
-            <select id="output-ports" name="output" class="form-select" list="output-ports"
+            <select id="output-ports" name="output" class="form-select" list="output-ports" required
               title="MIDI output device to send to">
+              <option value="" disabled <%= $edit->{output} ? '' : 'selected' %>>-- choose output --</option>
 % for my $p (@$outputs) {
               <option value="<%= $p %>" <%= $edit->{output} && $edit->{output} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
@@ -191,12 +193,12 @@
 
           <div class="col-md-3">
             <label class="form-label">Channel (0–15)</label>
-            <input type="number" name="channel" class="form-control" min="0" max="15"
+            <input type="number" name="channel" class="form-control" min="0" max="15" required
               value="<%= $edit->{channel} // '' %>" title="MIDI channel!">
           </div>
           <div class="col-md-3">
             <label class="form-label">Control (CC#)</label>
-            <input type="number" name="control" class="form-control" min="0" max="127"
+            <input type="number" name="control" class="form-control" min="0" max="127" required
               value="<%= $edit->{control} // '' %>" title="Control-change number (CC#) this filter controls">
           </div>
           <div class="col-md-3">
