@@ -378,6 +378,21 @@ END {
     _kill_stray_workers();
 }
 
+# Validates the csrf_token param against the session for any route that
+# mutates state. On failure, flashes an error, redirects to '/', and
+# returns false so the caller can bail out immediately. Requires every
+# <form method="post"> in the templates to include %= csrf_field.
+sub _require_csrf ($c) {
+    my $v = $c->validation;
+    $v->csrf_protect;
+    if ($v->has_error('csrf_token')) {
+        $c->flash(error => 'Your session expired — please try again');
+        $c->redirect_to('/');
+        return 0;
+    }
+    return 1;
+}
+
 get '/' => sub ($c) {
     $c->stash(
         filters      => \@filters,
@@ -392,6 +407,8 @@ get '/' => sub ($c) {
 } => 'index';
 
 post '/filters' => sub ($c) {
+    return unless _require_csrf($c);
+
     my $v = $c->req->params->to_hash;
 
     my %params;
@@ -441,6 +458,8 @@ post '/filters' => sub ($c) {
 } => 'filters';
 
 post '/edit' => sub ($c) {
+    return unless _require_csrf($c);
+
     my $id = $c->param('edit_id');
     my $f = find_filter($id) or return $c->redirect_to('/');
     return $c->redirect_to('/') if is_running($id); # don't edit while running
@@ -454,6 +473,8 @@ get '/cancel' => sub ($c) {
 } => 'cancel';
 
 post '/delete' => sub ($c) {
+    return unless _require_csrf($c);
+
     my $id = $c->param('delete_id');
     my $f = find_filter($id) or return $c->redirect_to('/');
     with_filters_lock(sub {
@@ -466,36 +487,9 @@ post '/delete' => sub ($c) {
     $c->redirect_to('/');
 } => 'delete';
 
-post '/start' => sub ($c) {
-    my $id = $c->param('id');
-    my $f = find_filter($id) or return $c->redirect_to('/');
-    try {
-        start_filter($id);
-        $c->flash(message => "Filter '$f->{name}' started");
-    }
-    catch ($e) {
-        $c->flash(error => "Can't start '$f->{name}': $e");
-    }
-    $c->redirect_to('/');
-} => 'start';
-
-post '/stop' => sub ($c) {
-    my $id = $c->param('id');
-    my $f = find_filter($id) or return $c->redirect_to('/');
-    
-    stop_filter($id);
-    
-    # Extra safety net: fully purge the port key reference
-    delete $controllers{_port_key($f)};
-
-    # Force an instant system sweep of unlinked IO::Async children
-    _kill_stray_workers();
-
-    $c->flash(message => "Filter '$f->{name}' stopped");
-    $c->redirect_to('/');
-} => 'stop';
-
 post '/start_all' => sub ($c) {
+    return unless _require_csrf($c);
+
     with_filters_lock(sub {
         $running_ids{ $_->{id} } = 1 for @filters;
     });
@@ -516,6 +510,8 @@ post '/start_all' => sub ($c) {
 } => 'start_all';
 
 post '/stop_all' => sub ($c) {
+    return unless _require_csrf($c);
+
     with_filters_lock(sub { %running_ids = () });
     
     # Stop every individual controller instance explicitly 
@@ -532,6 +528,8 @@ post '/stop_all' => sub ($c) {
 } => 'stop_all';
 
 post '/filters/clear' => sub ($c) {
+    return unless _require_csrf($c);
+
     with_filters_lock(sub {
         %running_ids = ();
         @filters = ();
@@ -543,6 +541,8 @@ post '/filters/clear' => sub ($c) {
 } => 'clear_filters';
 
 post '/sets/save' => sub ($c) {
+    return unless _require_csrf($c);
+
     my $name = $c->param('set_name') // '';
     $name =~ s/^\s+|\s+$//g;
 
@@ -568,6 +568,8 @@ post '/sets/save' => sub ($c) {
 } => 'save_set';
 
 post '/sets/load' => sub ($c) {
+    return unless _require_csrf($c);
+
     my $name = $c->param('set_name') // '';
     my $set  = $saved_sets{$name};
 
@@ -590,6 +592,8 @@ post '/sets/load' => sub ($c) {
 } => 'load_set';
 
 post '/sets/delete' => sub ($c) {
+    return unless _require_csrf($c);
+
     my $name = $c->param('set_name') // '';
 
     if (!$saved_sets{$name}) {
