@@ -136,7 +136,6 @@ sub _port_key ($f) {
     return "$f->{input}\0$f->{output}";
 }
 
-# Find your old _direct_children function and replace it completely:
 sub _direct_children () {
     # Using 'ps -U <current_user>' grabs all tasks run by you on macOS
     my $user = $ENV{USER} || 'gene';
@@ -156,8 +155,6 @@ sub _stop_controller ($key) {
     app->log->info("controller->stop failed for '$key': $@") if $@;
     _stop_worker($key);
 }
-
-# --- Replace these two functions in your script ---
 
 sub _stop_worker ($key) {
     my $pid = delete $worker_pid{$key} or return;
