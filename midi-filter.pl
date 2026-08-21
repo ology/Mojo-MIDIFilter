@@ -30,39 +30,17 @@ use constant FIELDS => qw(
     step_up step_down verbose
 );
 
-# how often (seconds) to pump each live MIDI::RtController's event loop
+# how often in seconds to pump each live MIDI::RtController's event loop
 use constant PUMP_INTERVAL => 0.005;
 
-# --- persisted config: the list of configured filters (survives restarts) ---
 my @filters;
 my $next_id = 1;
-
-# --- persisted: name of the saved set that was most recently loaded or
-# saved, so the UI can show which set is "current". Cleared whenever the
-# filter list is modified in a way that could make it diverge from that
-# set (add, edit, delete, clear). ---
 my $current_set_name;
-
-# --- persisted config: named, saved snapshots of @filters ---
 my %saved_sets;
-
-# --- persisted: which filter ids should currently be running. Since
-# starting/stopping no longer spawns/kills an OS process, it's safe (and
-# useful) to persist this: a restarted server reattaches automatically. ---
 my %running_ids;
-
-# --- transient, per-process only: live MIDI::RtController instances,
-# keyed by "$input\0$output" ---
 my %controllers;
-
-# --- transient, per-process only: the OS PID of each controller's
-# spawned _rtmidi_loop worker, same keys as %controllers. Captured
-# explicitly at spawn time (see rebuild_controllers) rather than
-# discovered later by scanning, so we always know exactly which PID
-# corresponds to which controller. ---
 my %worker_pid;
-
-my %edit_filter; # single record being edited, mirrors phrase-generator's %edit_part
+my %edit_filter; # single record being edited
 
 sub load_state () {
     return unless -e STATE;
@@ -98,7 +76,6 @@ sub with_filters_lock ($code) {
     }
 }
 
-# Same pattern as with_filters_lock, but for the saved-sets store
 sub with_sets_lock ($code) {
     open my $lock_fh, '>', SETSLOCK or die "Can't open @{[SETSLOCK]}: $!\n";
     flock($lock_fh, LOCK_EX) or die "Can't lock @{[SETSLOCK]}: $!\n";
@@ -162,7 +139,7 @@ sub _port_key ($f) {
 }
 
 sub _direct_children () {
-    # Using 'ps -U <current_user>' grabs all tasks run by you on macOS
+    # Using 'ps -U <current_user>' grabs all tasks run by you
     my $user = $ENV{USER} || 'gene';
     open my $fh, '-|', 'ps', '-U', $user, '-o', 'pid=' or do {
         app->log->info("ps query failed to run: $!");
@@ -185,10 +162,9 @@ sub _stop_worker ($key) {
     my $pid = delete $worker_pid{$key} or return;
 
     app->log->info("Targeted cleanup: Sending TERM to worker PID $pid for '$key'");
-    
-    # Send TERM to the process group if possible, or the process directly
+
     kill('TERM', $pid);
-    
+
     # Wait explicitly for this child using non-blocking waitpid
     for (1 .. 20) { 
         my $res = waitpid($pid, 1); # WNOHANG = 1
@@ -206,32 +182,32 @@ sub _stop_worker ($key) {
 
 sub _kill_stray_workers () {
     my @all_pids = _direct_children();
-    
+
     my @workers;
     for my $pid (@all_pids) {
         next if $pid == $$; # Absolutely skip killing our own Mojolicious server!
-        
+
         if (open my $cmd_fh, '-|', 'ps', '-ww', '-o', 'command=', '-p', $pid) {
             my $cmdline = <$cmd_fh> // '';
             close $cmd_fh;
-            
-            # Match the exact IO::Async channel setup strings seen in your ps logs
+
+            # Match the exact IO::Async channel setup strings seen in the ps logs
             if ($cmdline =~ /MIDI::RtController|_rtmidi_loop|IO::Async::Channel/i) {
                 push @workers, $pid;
             }
         }
     }
-    
+
     return unless @workers;
     app->log->info("Killing unlinked asynchronous worker processes: @workers");
-    
+
     kill('TERM', @workers);
     for (1 .. 25) {
         @workers = grep { kill(0, $_) } @workers;
         last unless @workers;
         select(undef, undef, undef, 0.04);
     }
-    
+
     if (@workers) {
         app->log->info("Forcing absolute KILL on lingering loops: @workers");
         kill('KILL', @workers);
@@ -333,16 +309,16 @@ sub start_filter ($id) {
 sub stop_filter ($id) {
     my $f = find_filter($id) or return;
     return unless is_running($id);
-    
+
     my $key = _port_key($f);
     with_filters_lock(sub { delete $running_ids{$id} });
-    
+
     # Forcefully shut down and delete the object reference immediately
     if ($controllers{$key}) {
         _stop_controller($key);
         delete $controllers{$key};
     }
-    
+
     rebuild_controllers();
 }
 
@@ -350,7 +326,7 @@ Mojo::IOLoop->recurring(PUMP_INTERVAL, sub {
     for my $key (keys %controllers) {
         # Skip if the controller was deleted by a stop action mid-tick
         my $c = $controllers{$key} or next; 
-        
+
         eval { $c->loop->loop_once(0) };
         if ($@) {
             warn "MIDI controller for '$key' failed: $@";
@@ -376,8 +352,7 @@ hook before_dispatch => sub ($c) {
 };
 
 $SIG{CHLD} = 'DEFAULT';
-
-$SIG{INT} = sub {
+$SIG{INT}  = sub {
     say "\nStopping all filters...";
     _stop_controller($_) for keys %controllers;
     %controllers = ();
@@ -391,10 +366,6 @@ END {
     _kill_stray_workers();
 }
 
-# Validates the csrf_token param against the session for any route that
-# mutates state. On failure, flashes an error, redirects to '/', and
-# returns false so the caller can bail out immediately. Requires every
-# <form method="post"> in the templates to include %= csrf_field.
 sub _require_csrf ($c) {
     my $v = $c->validation;
     $v->csrf_protect;
@@ -531,16 +502,16 @@ post '/stop_all' => sub ($c) {
     return unless _require_csrf($c);
 
     with_filters_lock(sub { %running_ids = () });
-    
+
     # Stop every individual controller instance explicitly 
     for my $key (keys %controllers) {
         _stop_controller($key);
         delete $controllers{$key};
     }
-    
+
     %controllers = ();
     rebuild_controllers();
-    
+
     $c->flash(message => 'Stopped all filters');
     $c->redirect_to('/');
 } => 'stop_all';
