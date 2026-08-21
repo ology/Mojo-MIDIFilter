@@ -416,6 +416,7 @@ get '/' => sub ($c) {
         running      => { map { $_->{id} => is_running($_->{id}) } @filters },
         saved_sets   => [ sort keys %saved_sets ],
         current_set  => $current_set_name,
+        any_running  => (grep { is_running($_->{id}) } @filters) ? 1 : 0,
     );
     $c->render('index');
 } => 'index';
