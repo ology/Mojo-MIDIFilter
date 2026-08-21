@@ -36,6 +36,12 @@ use constant PUMP_INTERVAL => 0.005;
 my @filters;
 my $next_id = 1;
 
+# --- persisted: name of the saved set that was most recently loaded or
+# saved, so the UI can show which set is "current". Cleared whenever the
+# filter list is modified in a way that could make it diverge from that
+# set (add, edit, delete, clear). ---
+my $current_set_name;
+
 # --- persisted config: named, saved snapshots of @filters ---
 my %saved_sets;
 
@@ -60,9 +66,10 @@ my %edit_filter; # single record being edited, mirrors phrase-generator's %edit_
 sub load_state () {
     return unless -e STATE;
     my $state = retrieve(STATE);
-    @filters     = @{ $state->{filters} // [] };
-    $next_id     = $state->{next_id} // 1;
-    %running_ids = %{ $state->{running} // {} };
+    @filters          = @{ $state->{filters} // [] };
+    $next_id          = $state->{next_id} // 1;
+    %running_ids      = %{ $state->{running} // {} };
+    $current_set_name = $state->{current_set};
 }
 
 sub load_sets () {
@@ -110,7 +117,12 @@ sub with_sets_lock ($code) {
 
 sub save_state () {
     my $tmp = STATE . ".$$.tmp";
-    store { filters => \@filters, next_id => $next_id, running => \%running_ids }, $tmp;
+    store {
+        filters     => \@filters,
+        next_id     => $next_id,
+        running     => \%running_ids,
+        current_set => $current_set_name,
+    }, $tmp;
     rename $tmp, STATE or warn "Can't replace @{[STATE]}: $!\n";
 }
 
@@ -402,6 +414,7 @@ get '/' => sub ($c) {
         outputs      => known_output_ports(),
         running      => { map { $_->{id} => is_running($_->{id}) } @filters },
         saved_sets   => [ sort keys %saved_sets ],
+        current_set  => $current_set_name,
     );
     $c->render('index');
 } => 'index';
@@ -440,6 +453,7 @@ post '/filters' => sub ($c) {
                 }
                 %$f = (%$f, %params, id => $f->{id});
                 %edit_filter = ();
+                $current_set_name = undef;
                 $c->flash(message => "Filter '$f->{name}' updated");
             }
             else {
@@ -449,6 +463,7 @@ post '/filters' => sub ($c) {
         }
         else {
             push @filters, { %params, id => $next_id++ };
+            $current_set_name = undef;
             $c->flash(message => "Filter '$params{name}' added");
         }
     });
@@ -480,6 +495,7 @@ post '/delete' => sub ($c) {
     with_filters_lock(sub {
         delete $running_ids{$id};
         @filters = grep { $_->{id} != $id } @filters;
+        $current_set_name = undef;
     });
     rebuild_controllers();
     %edit_filter = () if $edit_filter{id} && $edit_filter{id} == $id;
@@ -533,6 +549,7 @@ post '/filters/clear' => sub ($c) {
     with_filters_lock(sub {
         %running_ids = ();
         @filters = ();
+        $current_set_name = undef;
     });
     rebuild_controllers();
     %edit_filter = (); # any in-progress edit no longer refers to a real filter
@@ -563,6 +580,10 @@ post '/sets/save' => sub ($c) {
         ];
     });
 
+    # The filters just saved now match this set, so mark it current.
+    # Separate lock (own state file) from with_sets_lock above.
+    with_filters_lock(sub { $current_set_name = $name });
+
     $c->flash(message => "Saved set '$name'");
     $c->redirect_to('/');
 } => 'save_set';
@@ -584,6 +605,7 @@ post '/sets/load' => sub ($c) {
 
     with_filters_lock(sub {
         @filters = map { { %$_, id => $next_id++ } } @$set;
+        $current_set_name = $name;
     });
     %edit_filter = (); # ids from any in-progress edit no longer apply
 
@@ -603,6 +625,9 @@ post '/sets/delete' => sub ($c) {
 
     with_sets_lock(sub {
         delete $saved_sets{$name};
+    });
+    with_filters_lock(sub {
+        $current_set_name = undef if defined $current_set_name && $current_set_name eq $name;
     });
 
     $c->flash(message => "Deleted set '$name'");

@@ -35,7 +35,7 @@
               <select name="set_name" class="form-select" <%= @$saved_sets ? '' : 'disabled' %>
                 title="Choose a saved set to load or delete">
 % for my $name (@$saved_sets) {
-                <option value="<%= $name %>"><%= $name %></option>
+                <option value="<%= $name %>" <%= (defined $current_set && $current_set eq $name) ? 'selected' : '' %>><%= $name %></option>
 % }
               </select>
             </div>
