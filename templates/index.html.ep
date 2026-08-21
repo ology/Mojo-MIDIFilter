@@ -32,14 +32,16 @@
             <%= csrf_field %>
             <div class="flex-grow-1">
               <label class="form-label">Saved sets</label>
-              <select name="set_name" class="form-select" <%= (@$saved_sets && !$any_running) ? '' : 'disabled' %>
+              <select id="saved-set-select" name="set_name" class="form-select" <%= (@$saved_sets && !$any_running) ? '' : 'disabled' %>
                 title="Choose a saved set to load or delete">
+                <option value="" <%= (defined $current_set && length $current_set) ? '' : 'selected' %>>Select...</option>
 % for my $name (@$saved_sets) {
                 <option value="<%= $name %>" <%= (defined $current_set && $current_set eq $name) ? 'selected' : '' %>><%= $name %></option>
 % }
               </select>
             </div>
-            <button type="submit" formaction="<%= url_for('load_set') %>" class="btn btn-outline-primary" <%= (@$saved_sets && !$any_running) ? '' : 'disabled' %>
+            <button type="submit" id="load-set-btn" formaction="<%= url_for('load_set') %>" class="btn btn-outline-primary"
+              <%= (@$saved_sets && !$any_running && defined $current_set && length $current_set) ? '' : 'disabled' %>
               title="Replace the current filter list with the selected saved set"
               onclick="return confirm('Replace the current filter list with this saved set?');">Load</button>
             <button type="submit" formaction="<%= url_for('delete_set') %>" class="btn btn-outline-danger" <%= (@$saved_sets && !$any_running) ? '' : 'disabled' %>
@@ -264,3 +266,18 @@
   </div>
 
 </div>
+
+<script>
+  (function () {
+    var select = document.getElementById('saved-set-select');
+    var loadBtn = document.getElementById('load-set-btn');
+    if (!select || !loadBtn) return;
+
+    select.addEventListener('change', function () {
+      // Respect the select's own disabled state (set server-side when
+      // filters are running or there are no saved sets) — only toggle
+      // the Load button based on selection when the select is usable.
+      loadBtn.disabled = select.disabled || select.value === '';
+    });
+  })();
+</script>
