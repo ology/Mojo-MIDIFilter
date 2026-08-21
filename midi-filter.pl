@@ -1,16 +1,5 @@
 #!/usr/bin/env perl
 
-# A control panel for running any number of MIDI::RtController::Filter::CC
-# filters concurrently -- IN-PROCESS, using MIDI::RtController's own
-# multi-filter support (see continuous.pl), rather than forking a separate
-# OS process per filter. Filters that share an (input, output) port pair
-# are attached to one shared MIDI::RtController instance via add_filters.
-#
-# IMPORTANT: because all MIDI I/O now lives inside this single process's
-# event loop, this app MUST run with exactly one hypnotoad worker
-# (workers => 1 in midi-filter.conf). Multiple workers would each try to
-# open the same MIDI ports independently and process every event N times.
-
 use v5.36;
 use feature qw(try);
 no warnings qw(experimental::try);
@@ -232,8 +221,9 @@ sub _filter_spec ($f, $input) {
         event => 'all',
     );
     for my $field (qw(channel control trigger value initial_point
-                       range_bottom range_top range_step time_step
-                       step_up step_down)) {
+        range_bottom range_top range_step time_step
+        step_up step_down))
+    {
         $spec{$field} = $f->{$field} if defined $f->{$field} && length $f->{$field};
     }
     return \%spec;
