@@ -77,11 +77,17 @@ sub with_filters_lock ($code) {
     open my $lock_fh, '>', STATELOCK or die "Can't open @{[STATELOCK]}: $!\n";
     flock($lock_fh, LOCK_EX) or die "Can't lock @{[STATELOCK]}: $!\n";
 
-    load_state();
-    $code->();
-    save_state();
-
-    close $lock_fh; # releases the lock
+    try {
+        load_state();
+        $code->();
+        save_state();
+    }
+    catch ($e) {
+        die $e; # preserve the original failure for the caller
+    }
+    finally {
+        close $lock_fh; # always releases the lock, even if $code->() dies
+    }
 }
 
 # Same pattern as with_filters_lock, but for the saved-sets store
@@ -89,11 +95,17 @@ sub with_sets_lock ($code) {
     open my $lock_fh, '>', SETSLOCK or die "Can't open @{[SETSLOCK]}: $!\n";
     flock($lock_fh, LOCK_EX) or die "Can't lock @{[SETSLOCK]}: $!\n";
 
-    load_sets();
-    $code->();
-    save_sets();
-
-    close $lock_fh; # releases the lock
+    try {
+        load_sets();
+        $code->();
+        save_sets();
+    }
+    catch ($e) {
+        die $e; # preserve the original failure for the caller
+    }
+    finally {
+        close $lock_fh; # always releases the lock, even if $code->() dies
+    }
 }
 
 sub save_state () {
