@@ -153,7 +153,7 @@
             <label class="form-label">Filter type</label>
             <select name="filter" class="form-select" title="Which filter algorithm to run">
 % for my $type (@$filter_types) {
-              <option value="<%= $type %>" <%= ($edit->{filter} // 'breathe') eq $type ? 'selected' : '' %>><%= $type %></option>
+              <option value="<%= $type %>" <%= ($edit->{filter} // 'single') eq $type ? 'selected' : '' %>><%= $type %></option>
 % }
             </select>
           </div>
