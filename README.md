@@ -26,3 +26,9 @@ hypnotoad midi-filter.pl
 Browse to http://127.0.0.1:3333/ or wherever hypnotoad is configured for.
 
 Voila! :D
+
+## Notes
+
+Write-up: https://ology.github.io/2026/08/21/loving-the-kaoss-pad-v/
+
+To generically control another synth (notes, wheels, everything), just don't set any CC, trigger, range, etc. parameters - just the channel.
