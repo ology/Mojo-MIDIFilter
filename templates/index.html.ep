@@ -197,7 +197,7 @@
           <div class="col-md-3">
             <label class="form-label">Channel (0–15)</label>
             <input type="number" name="channel" class="form-control" min="0" max="15" required
-              value="<%= $edit->{channel} // '' %>" title="MIDI channel!">
+              value="<%= $edit->{channel} // '0' %>" title="MIDI channel!">
           </div>
           <div class="col-md-3">
             <label class="form-label">Control (CC#)</label>
