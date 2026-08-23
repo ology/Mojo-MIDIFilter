@@ -133,11 +133,12 @@
 
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center" id="add-filter-toggle" role="button"
-      tabindex="0" aria-expanded="true" aria-controls="add-filter-body" style="cursor: pointer;">
+      tabindex="0" aria-expanded="<%= keys %$edit ? 'true' : 'false' %>" aria-controls="add-filter-body" style="cursor: pointer;">
       <span><%= keys %$edit ? 'Edit Filter' : 'Add Filter' %></span>
-      <span id="add-filter-chevron" aria-hidden="true" style="transition: transform 0.2s ease;">&#9650;</span>
+      <span id="add-filter-chevron" aria-hidden="true"
+        style="transition: transform 0.2s ease; transform: rotate(<%= keys %$edit ? '180' : '0' %>deg);">&#9650;</span>
     </div>
-    <div class="collapse show" id="add-filter-body">
+    <div class="collapse<%= keys %$edit ? ' show' : '' %>" id="add-filter-body">
     <div class="card-body">
       <form method="post" action="<%= url_for('filters') %>">
         <%= csrf_field %>
