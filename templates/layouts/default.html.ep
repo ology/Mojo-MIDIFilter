@@ -19,7 +19,9 @@
 
   <footer class="text-center text-muted small mt-5 pt-3 border-top">
     &copy; <%= (localtime)[5] + 1900 %> &middot;
-    Built with <a href="https://mojolicious.org/">Mojolicious</a>
+    Created by <a href="https://www.ology.net/">Gene</a>
+    with <a href="https://www.perl.org/">Perl</a>
+    & <a href="https://www.mojolicious.org/">Mojolicious</a>
   </footer>
 
 </div>
