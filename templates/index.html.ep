@@ -267,57 +267,55 @@
     var toggle = document.getElementById('add-filter-toggle');
     var body = document.getElementById('add-filter-body');
     var chevron = document.getElementById('add-filter-chevron');
-    if (!toggle || !body || !chevron) return;
+    if (toggle && body && chevron) {
+      var setExpanded = function (expanded) {
+        body.classList.toggle('show', expanded);
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        chevron.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
+      };
 
-    function setExpanded(expanded) {
-      body.classList.toggle('show', expanded);
-      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-      chevron.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
-    }
+      toggle.addEventListener('click', function () {
+        setExpanded(!body.classList.contains('show'));
+      });
+      toggle.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggle.click();
+        }
+      });
 
-    toggle.addEventListener('click', function () {
-      setExpanded(!body.classList.contains('show'));
-    });
-    toggle.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        toggle.click();
-      }
-    });
-
-    // Editing a filter should always reveal the form, even if it was
-    // previously collapsed.
+      // Editing a filter should always reveal the form, even if it was
+      // previously collapsed.
 % if (keys %$edit) {
-    setExpanded(true);
+      setExpanded(true);
 % }
+    }
   })();
-</script>
 
-<script>
   (function () {
     var select = document.getElementById('saved-set-select');
     var deleteBtn = document.getElementById('delete-set-btn');
-    if (!select || !deleteBtn) return;
+    if (select && deleteBtn) {
+      var lastValue = select.value;
 
-    var lastValue = select.value;
+      select.addEventListener('change', function () {
+        // Respect the select's own disabled state (set server-side when
+        // filters are running or there are no saved sets) — only toggle
+        // Delete based on selection when the select is usable.
+        var shouldDisable = select.disabled || select.value === '';
+        deleteBtn.disabled = shouldDisable;
 
-    select.addEventListener('change', function () {
-      // Respect the select's own disabled state (set server-side when
-      // filters are running or there are no saved sets) — only toggle
-      // Delete based on selection when the select is usable.
-      var shouldDisable = select.disabled || select.value === '';
-      deleteBtn.disabled = shouldDisable;
+        if (shouldDisable) {
+          lastValue = select.value;
+          return;
+        }
 
-      if (shouldDisable) {
-        lastValue = select.value;
-        return;
-      }
-
-      if (confirm('Replace the current filter list with this saved set?')) {
-        select.form.submit(); // submits to load_set, the form's default action
-      } else {
-        select.value = lastValue; // cancelled — leave the selection as it was
-      }
-    });
+        if (confirm('Replace the current filter list with this saved set?')) {
+          select.form.submit(); // submits to load_set, the form's default action
+        } else {
+          select.value = lastValue; // cancelled — leave the selection as it was
+        }
+      });
+    }
   })();
 </script>
