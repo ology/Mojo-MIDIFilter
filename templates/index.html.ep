@@ -243,6 +243,7 @@
                 <button type="submit" class="btn btn-outline-secondary" <%= $any_running ? 'disabled' : '' %>
                   title="Edit this filter's settings">Edit</button>
               </form>
+              &nbsp;
               <form method="post" action="<%= url_for('delete') %>" class="d-inline"
                     onsubmit="return confirm('Delete this filter?');">
                 <%= csrf_field %>
