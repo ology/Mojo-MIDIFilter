@@ -72,7 +72,7 @@
   </div>
 
 % if (!@$filters) {
-  <p class="text-muted"><b>No filters configured yet — add one below.</b></p>
+  <p class="text-muted"><b>No filters configured yet - add one below.</b></p>
 % } else {
   <div class="table-responsive mb-4">
     <table class="table table-striped align-middle">
