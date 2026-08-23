@@ -163,15 +163,6 @@
             </select>
           </div>
 
-          <div class="col-md-4">
-            <div class="form-check mt-4 pt-2">
-              <input type="checkbox" class="form-check-input" id="verbose" name="verbose" value="1"
-                title="Log extra detail while this filter runs"
-                <%= $edit->{verbose} ? 'checked' : '' %>>
-              <label class="form-check-label" for="verbose">Verbose</label>
-            </div>
-          </div>
-
           <div class="col-md-6">
             <label class="form-label">Input port</label>
             <select id="input-ports" name="input" class="form-select" list="input-ports" required
