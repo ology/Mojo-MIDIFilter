@@ -132,9 +132,12 @@
 % }
 
   <div class="card">
-    <div class="card-header">
-      <%= keys %$edit ? 'Edit Filter' : 'Add Filter' %>
+    <div class="card-header d-flex justify-content-between align-items-center" id="add-filter-toggle" role="button"
+      tabindex="0" aria-expanded="true" aria-controls="add-filter-body" style="cursor: pointer;">
+      <span><%= keys %$edit ? 'Edit Filter' : 'Add Filter' %></span>
+      <span id="add-filter-chevron" aria-hidden="true" style="transition: transform 0.2s ease;">&#9650;</span>
     </div>
+    <div class="collapse show" id="add-filter-body">
     <div class="card-body">
       <form method="post" action="<%= url_for('filters') %>">
         <%= csrf_field %>
@@ -260,9 +263,41 @@
         </div>
       </form>
     </div>
+    </div>
   </div>
 
 </div>
+
+<script>
+  (function () {
+    var toggle = document.getElementById('add-filter-toggle');
+    var body = document.getElementById('add-filter-body');
+    var chevron = document.getElementById('add-filter-chevron');
+    if (!toggle || !body || !chevron) return;
+
+    function setExpanded(expanded) {
+      body.classList.toggle('show', expanded);
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      chevron.style.transform = expanded ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+
+    toggle.addEventListener('click', function () {
+      setExpanded(!body.classList.contains('show'));
+    });
+    toggle.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle.click();
+      }
+    });
+
+    // Editing a filter should always reveal the form, even if it was
+    // previously collapsed.
+% if (keys %$edit) {
+    setExpanded(true);
+% }
+  })();
+</script>
 
 <script>
   (function () {
