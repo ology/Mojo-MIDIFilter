@@ -71,66 +71,6 @@
     </div>
   </div>
 
-% if (!@$filters) {
-  <p class="text-muted"><b>No filters configured yet - add one below.</b></p>
-% } else {
-  <div class="table-responsive mb-4">
-    <table class="table table-striped align-middle">
-      <thead>
-        <tr>
-          <th>Status</th>
-          <th>Name</th>
-          <th>Filter</th>
-          <th>Input</th>
-          <th>Output</th>
-          <th>Ch</th>
-          <th>CC</th>
-          <th>Trig</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-% for my $f (@$filters) {
-%   my $is_running = $running->{ $f->{id} };
-        <tr>
-          <td>
-% if ($is_running) {
-            <span class="badge bg-success">running</span>
-% } else {
-            <span class="badge bg-secondary">stopped</span>
-% }
-          </td>
-          <td><%= $f->{name} %></td>
-          <td><code><%= $f->{filter} %></code></td>
-          <td><%= $f->{input} %></td>
-          <td><%= $f->{output} %></td>
-          <td><%= $f->{channel} // '—' %></td>
-          <td><%= $f->{control} // '—' %></td>
-          <td><%= $f->{trigger} // '—' %></td>
-          <td class="text-end">
-            <div class="btn-group btn-group-sm" role="group">
-              <form method="post" action="<%= url_for('edit') %>" class="d-inline">
-                <%= csrf_field %>
-                <input type="hidden" name="edit_id" value="<%= $f->{id} %>">
-                <button type="submit" class="btn btn-outline-secondary" <%= $any_running ? 'disabled' : '' %>
-                  title="Edit this filter's settings">Edit</button>
-              </form>
-              <form method="post" action="<%= url_for('delete') %>" class="d-inline"
-                    onsubmit="return confirm('Delete this filter?');">
-                <%= csrf_field %>
-                <input type="hidden" name="delete_id" value="<%= $f->{id} %>">
-                <button type="submit" class="btn btn-outline-danger" <%= $any_running ? 'disabled' : '' %>
-                  title="Delete this filter">Delete</button>
-              </form>
-            </div>
-          </td>
-        </tr>
-% }
-      </tbody>
-    </table>
-  </div>
-% }
-
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center" id="add-filter-toggle" role="button"
       tabindex="0" aria-expanded="<%= keys %$edit ? 'true' : 'false' %>" aria-controls="add-filter-body" style="cursor: pointer;">
@@ -257,6 +197,67 @@
     </div>
     </div>
   </div>
+  <p></p>
+
+% if (!@$filters) {
+  <p class="text-muted"><b>No filters configured yet</b></p>
+% } else {
+  <div class="table-responsive mb-4">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Name</th>
+          <th>Filter</th>
+          <th>Input</th>
+          <th>Output</th>
+          <th>Ch</th>
+          <th>CC</th>
+          <th>Trig</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+% for my $f (@$filters) {
+%   my $is_running = $running->{ $f->{id} };
+        <tr>
+          <td>
+% if ($is_running) {
+            <span class="badge bg-success">running</span>
+% } else {
+            <span class="badge bg-secondary">stopped</span>
+% }
+          </td>
+          <td><%= $f->{name} %></td>
+          <td><code><%= $f->{filter} %></code></td>
+          <td><%= $f->{input} %></td>
+          <td><%= $f->{output} %></td>
+          <td><%= $f->{channel} // '—' %></td>
+          <td><%= $f->{control} // '—' %></td>
+          <td><%= $f->{trigger} // '—' %></td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm" role="group">
+              <form method="post" action="<%= url_for('edit') %>" class="d-inline">
+                <%= csrf_field %>
+                <input type="hidden" name="edit_id" value="<%= $f->{id} %>">
+                <button type="submit" class="btn btn-outline-secondary" <%= $any_running ? 'disabled' : '' %>
+                  title="Edit this filter's settings">Edit</button>
+              </form>
+              <form method="post" action="<%= url_for('delete') %>" class="d-inline"
+                    onsubmit="return confirm('Delete this filter?');">
+                <%= csrf_field %>
+                <input type="hidden" name="delete_id" value="<%= $f->{id} %>">
+                <button type="submit" class="btn btn-outline-danger" <%= $any_running ? 'disabled' : '' %>
+                  title="Delete this filter">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+% }
+      </tbody>
+    </table>
+  </div>
+% }
 
 </div>
 
