@@ -14,7 +14,7 @@
     <div class="card-header">Filter Sets</div>
     <div class="card-body">
       <div class="row g-3">
-        <div class="col-md-4">
+        <div class="col-md-6">
           <form method="post" action="<%= url_for('save_set') %>" class="d-flex gap-2 align-items-end">
             <%= csrf_field %>
             <div class="flex-grow-1">
@@ -27,7 +27,7 @@
           </form>
         </div>
 
-        <div class="col-md-8">
+        <div class="col-md-6">
           <form method="post" action="<%= url_for('load_set') %>" class="d-flex gap-2 align-items-end">
             <%= csrf_field %>
             <div class="flex-grow-1">
