@@ -14,12 +14,12 @@ use Fcntl qw(:flock);
 no warnings qw(experimental::try);
 
 use constant {
-    STATE     => 'midi-filter-state.dat',
-    STATELOCK => 'midi-filter-state.lock',
-    SETS      => 'midi-filter-sets.dat',
-    SETSLOCK  => 'midi-filter-sets.lock',
-    SESSION_EXPIRATION => 60 * 60 * 24 * 14, # 14 days
-    PUMP_INTERVAL => 0.005, # how often in seconds to pump each live MIDI::RtController's event loop
+    STATE          => 'midi-filter-state.dat',
+    STATELOCK      => 'midi-filter-state.lock',
+    SETS           => 'midi-filter-sets.dat',
+    SETSLOCK       => 'midi-filter-sets.lock',
+    SESSION_EXPIRE => 60 * 60 * 24 * 14, # 14 days
+    PUMP_INTERVAL  => 0.005, # how often in seconds to pump each live MIDI::RtController's event loop
 };
 use constant FILTER_TYPES => qw(
     single clock_it breathe scatter stair_step ramp_up ramp_down flicker
@@ -612,6 +612,6 @@ my $log = Mojo::Log->new(
 );
 app->log($log);
 
-app->sessions->default_expiration(SESSION_EXPIRATION);
+app->sessions->default_expiration(SESSION_EXPIRE);
 
 app->start;
