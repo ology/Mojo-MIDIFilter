@@ -29,4 +29,4 @@ Voila! :D
 
 ## Notes
 
-To generically control another synth (notes, wheels, everything), just don't set any CC, trigger, range, etc. parameters - just the channel.
+To generically control another synth (notes, wheels, everything), set the filter type to "single" and don't set any CC, trigger, range, etc. parameters - just the channel.
