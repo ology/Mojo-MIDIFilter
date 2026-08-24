@@ -20,6 +20,8 @@ use constant {
     SETSLOCK  => 'midi-filter-sets.lock',
 };
 
+use constant SESSION_EXPIRATION => 60 * 60 * 24 * 14; # 14 days
+
 use constant FILTER_TYPES => qw(
     single clock_it breathe scatter stair_step ramp_up ramp_down flicker
 );
@@ -614,5 +616,7 @@ my $log = Mojo::Log->new(
   level => app->config->{log_level},
 );
 app->log($log);
+
+app->sessions->default_expiration(SESSION_EXPIRATION);
 
 app->start;
