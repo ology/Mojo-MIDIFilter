@@ -18,22 +18,17 @@ use constant {
     STATELOCK => 'midi-filter-state.lock',
     SETS      => 'midi-filter-sets.dat',
     SETSLOCK  => 'midi-filter-sets.lock',
+    SESSION_EXPIRATION => 60 * 60 * 24 * 14, # 14 days
+    PUMP_INTERVAL => 0.005, # how often in seconds to pump each live MIDI::RtController's event loop
 };
-
-use constant SESSION_EXPIRATION => 60 * 60 * 24 * 14; # 14 days
-
 use constant FILTER_TYPES => qw(
     single clock_it breathe scatter stair_step ramp_up ramp_down flicker
 );
-
 use constant FIELDS => qw(
     name input output filter channel control trigger value
     initial_point range_bottom range_top range_step time_step
     step_up step_down verbose
 );
-
-# how often in seconds to pump each live MIDI::RtController's event loop
-use constant PUMP_INTERVAL => 0.005;
 
 my @filters;
 my $next_id = 1;
