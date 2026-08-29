@@ -182,6 +182,11 @@
             <input type="number" name="step_down" class="form-control" min="0" max="127"
               value="<%= $edit->{step_down} // '' %>" title="Amount to decrease by on a downward step">
           </div>
+          <div class="col-md-3 d-none" id="bpm-field">
+            <label class="form-label">BPM</label>
+            <input type="number" name="bpm" class="form-control" step="0.1" min="0"
+              value="<%= $edit->{bpm} // '' %>" title="Beats per minute — used to compute the clock_it time step">
+          </div>
         </div>
 
         <div class="mt-4">
@@ -289,6 +294,18 @@
 % if (keys %$edit) {
       setExpanded(true);
 % }
+    }
+  })();
+
+  (function () {
+    var filterSelect = document.querySelector('select[name="filter"]');
+    var bpmField = document.getElementById('bpm-field');
+    if (filterSelect && bpmField) {
+      var updateBpmVisibility = function () {
+        bpmField.classList.toggle('d-none', filterSelect.value !== 'clock_it');
+      };
+      filterSelect.addEventListener('change', updateBpmVisibility);
+      updateBpmVisibility();
     }
   })();
 

@@ -123,6 +123,11 @@ sub known_input_ports () {
     ];
 }
 
+sub clock_bpm_to_time_step ($bpm) {
+    return undef unless defined $bpm && length $bpm && $bpm > 0;
+    return 60 / $bpm / 24;
+}
+
 sub find_filter ($id) {
     return (grep { $_->{id} == $id } @filters)[0];
 }
@@ -408,6 +413,8 @@ post '/filters' => sub ($c) {
     $params{range_top}     = length($v->{range_top} // '')     ? $v->{range_top}     : undef;
     $params{range_step}    = length($v->{range_step} // '')    ? $v->{range_step}    : undef;
     $params{time_step}     = length($v->{time_step} // '')     ? $v->{time_step}     : undef;
+    $params{bpm}           = length($v->{bpm} // '')            ? $v->{bpm}           : undef;
+    $params{time_step}     = clock_bpm_to_time_step($params{bpm}) if ($params{filter} // '') eq 'clock_it' && defined $params{bpm};
     $params{step_up}       = length($v->{step_up} // '')       ? $v->{step_up}       : undef;
     $params{step_down}     = length($v->{step_down} // '')     ? $v->{step_down}     : undef;
     $params{verbose}       = $v->{verbose} ? 1 : 0;
