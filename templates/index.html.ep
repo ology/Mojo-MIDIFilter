@@ -108,6 +108,9 @@
             <select id="input-ports" name="input" class="form-select" list="input-ports" required
               title="MIDI input device to listen on">
               <option value="" disabled <%= $edit->{input} ? '' : 'selected' %>>Choose input...</option>
+% if (defined $edit->{input} && length $edit->{input} && !grep { $_ eq $edit->{input} } @$inputs) {
+              <option value="<%= $edit->{input} %>" selected disabled><%= $edit->{input} %> (unavailable)</option>
+% }
 % for my $p (@$inputs) {
               <option value="<%= $p %>" <%= $edit->{input} && $edit->{input} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
@@ -119,6 +122,9 @@
             <select id="output-ports" name="output" class="form-select" list="output-ports" required
               title="MIDI output device to send to">
               <option value="" disabled <%= $edit->{output} ? '' : 'selected' %>>Choose output...</option>
+% if (defined $edit->{output} && length $edit->{output} && !grep { $_ eq $edit->{output} } @$outputs) {
+              <option value="<%= $edit->{output} %>" selected disabled><%= $edit->{output} %> (unavailable)</option>
+% }
 % for my $p (@$outputs) {
               <option value="<%= $p %>" <%= $edit->{output} && $edit->{output} eq $p ? 'selected' : '' %>><%= $p %></option>
 % }
