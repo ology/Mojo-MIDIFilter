@@ -170,7 +170,7 @@
           <div class="col-md-3">
             <label class="form-label">Time step (sec)</label>
             <input type="number" name="time_step" class="form-control" step="0.01" min="0"
-              value="<%= $edit->{time_step} // '' %>" title="Seconds between each iteration">
+              value="<%= defined $edit->{time_step} && length $edit->{time_step} ? sprintf('%.2f', $edit->{time_step}) : '' %>" title="Seconds between each iteration">
           </div>
           <div class="col-md-3">
             <label class="form-label">Step up (num)</label>
