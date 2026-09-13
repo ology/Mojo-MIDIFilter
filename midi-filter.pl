@@ -400,7 +400,7 @@ post '/filters' => sub ($c) {
     my $v = $c->req->params->to_hash;
 
     my %params;
-    $params{name}          = $v->{name} || 'Filter';
+    $params{name}          = $v->{name}   || 'Filter';
     $params{input}         = $v->{input}  || 'joystick';
     $params{output}        = $v->{output} || 'usb';
     $params{filter}        = $v->{filter} || 'breathe';
