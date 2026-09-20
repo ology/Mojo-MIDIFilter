@@ -4,6 +4,7 @@ use v5.36;
 use feature qw(try);
 
 use Mojolicious::Lite -signatures;
+use Data::Dumper::Compact qw(ddc);
 use Mojo::IOLoop ();
 use MIDI::RtMidi::FFI::Device ();
 use MIDI::RtController ();
@@ -493,8 +494,15 @@ post '/start_all' => sub ($c) {
             delete $running_ids{$_} for keys %errors;
         });
         rebuild_controllers();
-        my @failed = map { (find_filter($_) // {})->{name} // $_ } keys %errors;
-        $c->flash(error => 'Failed to start: ' . join(', ', @failed));
+
+        for my $id (keys %errors) {
+            app->log->error("start_all: filter $id failed: $errors{$id}");
+        }
+        my @failed = map {
+            my $name = (find_filter($_) // {})->{name} // $_;
+            "$name ($errors{$_})"
+        } keys %errors;
+        $c->flash(error => 'Failed to start: ' . join('; ', @failed));
     }
     else {
         $c->flash(message => 'Started all filters');
