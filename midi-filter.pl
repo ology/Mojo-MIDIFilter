@@ -22,7 +22,7 @@ use constant {
     PUMP_INTERVAL  => 0.005, # how often in seconds to pump each live MIDI::RtController's event loop
 };
 use constant FILTER_TYPES => qw(
-    single clock_it breathe scatter stair_step ramp_up ramp_down flicker
+    single clock_it breathe scatter stair_step ramp_up ramp_down flicker threshold
 );
 use constant FIELDS => qw(
     name input output filter channel control trigger value
