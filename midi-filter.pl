@@ -26,7 +26,7 @@ use constant FILTER_TYPES => qw(
     single clock_it breathe scatter stair_step ramp_up ramp_down flicker threshold
 );
 use constant FIELDS => qw(
-    name input output filter channel in_channel control trigger
+    name input output filter channel control trigger
     initial_point range_bottom range_top range_step time_step
     step_up step_down value verbose
 );
@@ -224,7 +224,7 @@ sub _filter_spec ($f, $input) {
         type  => $f->{filter} || 'single',
         event => 'all',
     );
-    for my $field (qw(channel in_channel control trigger value initial_point
+    for my $field (qw(channel control trigger value initial_point
         range_bottom range_top range_step time_step step_up step_down))
     {
         $spec{$field} = $f->{$field} if defined $f->{$field} && length $f->{$field};
@@ -405,7 +405,6 @@ post '/filters' => sub ($c) {
     $params{output}        = $v->{output} || 'usb';
     $params{filter}        = $v->{filter} || 'breathe';
     $params{channel}       = length($v->{channel} // '')       ? $v->{channel}       : undef;
-    $params{in_channel}    = length($v->{in_channel} // '')    ? $v->{in_channel}    : undef;
     $params{control}       = length($v->{control} // '')       ? $v->{control}       : undef;
     $params{trigger}       = length($v->{trigger} // '')       ? $v->{trigger}       : undef;
     $params{value}         = length($v->{value} // '')         ? $v->{value}         : undef;
