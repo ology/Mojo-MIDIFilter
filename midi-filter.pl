@@ -344,10 +344,6 @@ Mojo::IOLoop->recurring(PUMP_INTERVAL, sub {
     }
 });
 
-load_state();
-load_sets();
-rebuild_controllers(); # reattach anything that was running before a restart
-
 hook before_dispatch => sub ($c) {
     load_state();
     load_sets();
@@ -625,6 +621,13 @@ my $log = Mojo::Log->new(
   level => app->config->{log_level},
 );
 app->log($log);
+
+load_state();
+load_sets();
+
+app->plugins->on(warmup => sub ($app) {
+    rebuild_controllers(); # reattach anything that was running before a restart
+});
 
 app->sessions->default_expiration(SESSION_EXPIRE);
 
