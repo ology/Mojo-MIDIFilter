@@ -23,7 +23,7 @@ use constant {
     PUMP_INTERVAL  => 0.005, # how often in seconds to pump each live MIDI::RtController's event loop
 };
 use constant FILTER_TYPES => qw(
-    single clock_it breathe scatter stair_step ramp_up ramp_down flicker threshold
+    breathe clock_it flicker program_change ramp_down ramp_up scatter single stair_step threshold
 );
 use constant FIELDS => qw(
     name input output filter channel control trigger
@@ -219,10 +219,12 @@ sub _kill_stray_workers () {
 }
 
 sub _filter_spec ($f, $input) {
+    my $type = $f->{filter} || 'single';
     my %spec = (
         port  => $input,
-        type  => $f->{filter} || 'single',
-        event => 'all',
+        type  => $type,
+        # so only fire patch_change on incoming patch_change events, not every note
+        event => $type eq 'program_change' ? 'patch_change' : 'all',
     );
     for my $field (qw(channel control trigger value initial_point
         range_bottom range_top range_step time_step step_up step_down))
