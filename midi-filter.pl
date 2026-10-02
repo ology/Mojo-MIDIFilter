@@ -223,8 +223,7 @@ sub _filter_spec ($f, $input) {
     my %spec = (
         port  => $input,
         type  => $type,
-        # so only fire patch_change on incoming patch_change events, not every note
-        event => $type eq 'program_change' ? 'patch_change' : 'all',
+        event => 'all',
     );
     for my $field (qw(channel control trigger value initial_point
         range_bottom range_top range_step time_step step_up step_down))
