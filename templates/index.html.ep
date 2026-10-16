@@ -126,7 +126,7 @@
               <option value="<%= $edit->{output} %>" selected disabled><%= $edit->{output} %> (unavailable)</option>
 % }
 % for my $p (@$outputs) {
-              <option value="<%= $p %>" <%= $edit->{output} && $edit->{output} eq $p ? 'selected' : '' %>><%= $p %></option>
+              <option value="<%= $p %>" <%= $edit->{output} && normalize_port($edit->{output}) eq normalize_port($p) ? 'selected' : '' %>><%= $p %></option>
 % }
             </select>
           </div>

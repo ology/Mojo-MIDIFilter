@@ -1,8 +1,6 @@
 #!/usr/bin/env perl
 
-use v5.36;
-use feature qw(try);
-
+use v5.40;
 use Mojolicious::Lite -signatures;
 use Data::Dumper::Compact qw(ddc);
 use Mojo::IOLoop ();
@@ -11,8 +9,6 @@ use MIDI::RtController ();
 use MIDI::RtController::Filter::CC ();
 use Storable qw(retrieve store);
 use Fcntl qw(:flock);
-
-no warnings qw(experimental::try);
 
 use constant {
     STATE          => 'midi-filter-state.dat',
@@ -55,40 +51,24 @@ sub load_sets () {
     %saved_sets = %{ $data // {} };
 }
 
-# Runs $code with an exclusive lock held across the whole
-# load -> mutate -> save cycle
+# Runs $code with an exclusive lock held across the whole load -> mutate -> save cycle
 sub with_filters_lock ($code) {
     open my $lock_fh, '>', STATELOCK or die "Can't open @{[STATELOCK]}: $!\n";
-    flock($lock_fh, LOCK_EX) or die "Can't lock @{[STATELOCK]}: $!\n";
-
-    try {
-        load_state();
-        $code->();
-        save_state();
-    }
-    catch ($e) {
-        die $e; # preserve the original failure for the caller
-    }
-    finally {
-        close $lock_fh; # always releases the lock, even if $code->() dies
-    }
+    flock($lock_fh, LOCK_EX)         or die "Can't lock @{[STATELOCK]}: $!\n";
+    load_state();
+    $code->();
+    save_state();
+    return;
 }
 
 sub with_sets_lock ($code) {
     open my $lock_fh, '>', SETSLOCK or die "Can't open @{[SETSLOCK]}: $!\n";
     flock($lock_fh, LOCK_EX) or die "Can't lock @{[SETSLOCK]}: $!\n";
 
-    try {
         load_sets();
         $code->();
         save_sets();
-    }
-    catch ($e) {
-        die $e; # preserve the original failure for the caller
-    }
-    finally {
-        close $lock_fh; # always releases the lock, even if $code->() dies
-    }
+        return;
 }
 
 sub save_state () {
@@ -124,8 +104,29 @@ sub known_input_ports () {
     ];
 }
 
+# fluidsynth embeds its PID in the port name which changes on every restart
+sub normalize_port ($name) {
+    return $name unless defined $name && $name =~ /fluid/i;
+    my $stable = $name;
+    $stable =~ s/\s*\(\d+(?::\d+)?\)//g;  # "(12345)" and "(12345:0)"
+    $stable =~ s/\s+\d+:\d+\z//;          # trailing ALSA "128:0"
+    $stable =~ s/^\s+|\s+\z//g;           # trim
+    return $stable;
+}
+
+# Map a saved port name onto the port that currently exists. Exact matches
+# win; otherwise, for FluidSynth, match on the normalized form so a restarted
+# fluidsynth is picked up automatically.
+sub resolve_port ($saved, $live_ports) {
+    return $saved if grep { $_ eq $saved } @$live_ports;
+    return $saved unless $saved =~ /fluid/i;
+    my $want = normalize_port($saved);
+    my ($match) = grep { normalize_port($_) eq $want } @$live_ports;
+    return $match // $saved;   # let the open fail with a clear error
+}
+
 sub clock_bpm_to_time_step ($bpm) {
-    return undef unless defined $bpm && length $bpm && $bpm > 0;
+    return unless defined $bpm && length $bpm && $bpm > 0;
     return 60 / $bpm / 24;
 }
 
@@ -146,18 +147,20 @@ sub _direct_children () {
     my $user = $ENV{USER} || 'gene';
     open my $fh, '-|', 'ps', '-U', $user, '-o', 'pid=' or do {
         app->log->info("ps query failed to run: $!");
-        return ();
+        return;
     };
-    chomp(my @kids = <$fh>);
+    my @kids = <$fh>;
     close $fh;
     # Clean up whitespace padding from the process list
-    return map { s/^\s+|\s+$//g; $_ } @kids;
+    return map { /(\d+)/ ? $1 : () } @kids;
 }
 
 sub _stop_controller ($key) {
     my $controller = $controllers{$key} or return;
-    eval { $controller->stop };
-    app->log->info("controller->stop failed for '$key': $@") if $@;
+    try { $controller->stop }
+    catch ($e) {
+        app->log->info("controller->stop failed for '$key': $e");
+    }
     _stop_worker($key);
 }
 
@@ -246,17 +249,27 @@ sub rebuild_controllers () {
     }
 
     my %errors;
+    my $live_in  = known_input_ports();
+    my $live_out = known_output_ports();
+
     for my $key (keys %by_key) {
         my @group = @{ $by_key{$key} };
-        my ($input, $output) = split /\0/, $key, 2;
+        my ($saved_in, $saved_out) = split /\0/, $key, 2;
+        my $input   = resolve_port($saved_in,  $live_in);
+        my $output  = resolve_port($saved_out, $live_out);
         my $verbose = (grep { $_->{verbose} } @group) ? 1 : 0;
 
         my %before = map { $_ => 1 } _direct_children();
-        my $controller = eval {
-            MIDI::RtController->new(input => $input, output => $output, verbose => $verbose);
-        };
-        if (!$controller) {
-            my $err = $@ || 'Unknown error';
+        my $controller;
+        try {
+            $controller = MIDI::RtController->new(
+                input   => $input,
+                output  => $output,
+                verbose => $verbose,
+            );
+        }
+        catch ($e) {
+            my $err = $e || 'Unknown error';
             $errors{ $_->{id} } = "Can't open '$input' -> '$output': $err" for @group;
             next;
         }
@@ -267,7 +280,10 @@ sub rebuild_controllers () {
         # to capture its PID by diffing our child-process list.
         my $new_pid;
         for (1 .. 20) {
-            eval { $controller->loop->loop_once(0) };
+            try { $controller->loop->loop_once(0) }
+            catch ($e) {
+                app->log->warn('$controller->loop->loop_once(0) failed');
+            }
             ($new_pid) = grep { !$before{$_} } _direct_children();
             last if $new_pid;
             select(undef, undef, undef, 0.05);
@@ -281,12 +297,11 @@ sub rebuild_controllers () {
         }
 
         my @specs = map { _filter_spec($_, $input) } @group;
-        eval {
+        try {
             MIDI::RtController::Filter::CC::add_filters(\@specs, { $input => $controller });
-        };
-        if ($@) {
-            $errors{ $_->{id} } = "Can't configure filter: $@" for @group;
-            next;
+        }
+        catch ($e) {
+            $errors{ $_->{id} } = "Can't configure filter: $e" for @group;
         }
 
         $controllers{$key} = $controller;
@@ -330,9 +345,9 @@ Mojo::IOLoop->recurring(PUMP_INTERVAL, sub {
         # Skip if the controller was deleted by a stop action mid-tick
         my $c = $controllers{$key} or next; 
 
-        eval { $c->loop->loop_once(0) };
-        if ($@) {
-            warn "MIDI controller for '$key' failed: $@";
+        try { $c->loop->loop_once(0) }
+        catch ($e) {
+            warn "MIDI controller for '$key' failed: $e";
             with_filters_lock(sub {
                 for my $f (@filters) {
                     delete $running_ids{ $f->{id} } if _port_key($f) eq $key;
@@ -398,8 +413,8 @@ post '/filters' => sub ($c) {
 
     my %params;
     $params{name}          = $v->{name}   || 'Filter';
-    $params{input}         = $v->{input}  || 'joystick';
-    $params{output}        = $v->{output} || 'usb';
+    $params{input}         = normalize_port($v->{input}  || 'joystick');
+    $params{output}        = normalize_port($v->{output} || 'usb');
     $params{filter}        = $v->{filter} || 'breathe';
     $params{channel}       = length($v->{channel} // '')       ? $v->{channel}       : undef;
     $params{control}       = length($v->{control} // '')       ? $v->{control}       : undef;
@@ -557,7 +572,13 @@ post '/sets/save' => sub ($c) {
         # snapshot the current filters, stripped of the per-run 'id'
         # (a fresh id is assigned to each filter when a set is loaded)
         $saved_sets{$name} = [
-            map { my %f = %$_; delete $f{id}; \%f } @filters
+            map {
+                my %f = %$_;
+                delete $f{id};
+                $f{input}  = normalize_port($f{input});
+                $f{output} = normalize_port($f{output});
+                \%f
+            } @filters
         ];
     });
 
@@ -614,6 +635,8 @@ post '/sets/delete' => sub ($c) {
     $c->flash(message => "Deleted set '$name'");
     $c->redirect_to('/');
 } => 'delete_set';
+
+helper normalize_port => sub ($c, $name) { normalize_port($name) };
 
 plugin Config => { file => 'midi-filter.conf' };
 
