@@ -68,6 +68,11 @@
           title="Delete every configured filter"
           onclick="return confirm('Delete all configured filters? Running filters will be stopped first. This can\'t be undone.');">Clear</button>
       </form>
+      <span class="ms-auto align-self-center rounded-circle d-inline-block <%= $any_running ? 'bg-success' : 'bg-danger' %>"
+        style="width: 0.9rem; height: 0.9rem;"
+        role="img"
+        aria-label="<%= $any_running ? 'Filters running' : 'No filters running' %>"
+        title="<%= $any_running ? 'Filters running' : 'No filters running' %>"></span>
     </div>
   </div>
 
