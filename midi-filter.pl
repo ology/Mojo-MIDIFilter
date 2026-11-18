@@ -516,7 +516,7 @@ post '/start_all' => sub ($c) {
         $c->flash(error => 'Failed to start: ' . join('; ', @failed));
     }
     else {
-        $c->flash(message => 'Started all filters');
+        $c->flash(message => scalar(localtime) . ' - Started all filters');
     }
     $c->redirect_to('/');
 } => 'start_all';
@@ -535,7 +535,7 @@ post '/stop_all' => sub ($c) {
     %controllers = ();
     rebuild_controllers();
 
-    $c->flash(message => 'Stopped all filters');
+    $c->flash(message => scalar(localtime) . ' - Stopped all filters');
     $c->redirect_to('/');
 } => 'stop_all';
 
