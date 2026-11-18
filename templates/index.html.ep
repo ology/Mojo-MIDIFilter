@@ -300,8 +300,7 @@
         }
       });
 
-      // Editing a filter should always reveal the form, even if it was
-      // previously collapsed.
+// editing a filter should always reveal the form, even if it was previously collapsed
 % if (keys %$edit) {
       setExpanded(true);
 % }
