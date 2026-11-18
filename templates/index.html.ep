@@ -54,13 +54,13 @@
     <div class="card-footer d-flex gap-2">
       <form method="post" action="<%= url_for('start_all') %>" class="d-inline">
         <%= csrf_field %>
-        <button type="submit" class="btn btn-success btn-sm" <%= (@$filters && !$any_running) ? '' : 'disabled' %>
-          title="Start every configured filter">Start</button>
+        <button type="submit" id="start-all-btn" class="btn btn-success btn-sm" <%= (@$filters && !$any_running) ? '' : 'disabled' %>
+          title="Start every configured filter (spacebar)">Start</button>
       </form>
       <form method="post" action="<%= url_for('stop_all') %>" class="d-inline">
         <%= csrf_field %>
-        <button type="submit" class="btn btn-outline-dark btn-sm" <%= $any_running ? '' : 'disabled' %>
-          title="Stop every running filter">Stop</button>
+        <button type="submit" id="stop-all-btn" class="btn btn-outline-dark btn-sm" <%= $any_running ? '' : 'disabled' %>
+          title="Stop every running filter (spacebar)">Stop</button>
       </form>
       <form method="post" action="<%= url_for('clear_filters') %>" class="d-inline">
         <%= csrf_field %>
@@ -345,5 +345,36 @@
         }
       });
     }
+  })();
+
+  // Spacebar = toggle the running filter set: stop it if any filter is
+  // running, otherwise start the currently loaded set.
+  (function () {
+    var startBtn = document.getElementById('start-all-btn');
+    var stopBtn = document.getElementById('stop-all-btn');
+    if (!startBtn || !stopBtn) return;
+
+    // Elements that use the spacebar themselves (typing, pressing, opening).
+    var ownsSpace = 'input, textarea, select, button, a, summary, [role="button"], [contenteditable=""], [contenteditable="true"]';
+    var submitted = false; // guard against a double submit while the page reloads
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== ' ' && e.code !== 'Space') return;
+      if (e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+      if (e.defaultPrevented || submitted) return;
+
+      var target = e.target;
+      if (target && target.closest && target.closest(ownsSpace)) return;
+
+      // The server renders exactly one of these enabled: Stop while any
+      // filter is running, Start (when filters exist) otherwise.
+      var btn = !stopBtn.disabled ? stopBtn : (!startBtn.disabled ? startBtn : null);
+
+      e.preventDefault(); // keep the page from scrolling
+      if (!btn) return;   // nothing to start or stop (no filters configured)
+
+      submitted = true;
+      btn.click();        // submits the form, including its CSRF field
+    });
   })();
 </script>
