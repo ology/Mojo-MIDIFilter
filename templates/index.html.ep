@@ -347,14 +347,14 @@
     }
   })();
 
-  // Spacebar = toggle the running filter set: stop it if any filter is
+  // spacebar = toggle the running filter set: stop it if any filter is
   // running, otherwise start the currently loaded set.
   (function () {
     var startBtn = document.getElementById('start-all-btn');
     var stopBtn = document.getElementById('stop-all-btn');
     if (!startBtn || !stopBtn) return;
 
-    // Elements that use the spacebar themselves (typing, pressing, opening).
+    // elements that use the spacebar themselves
     var ownsSpace = 'input, textarea, select, button, a, summary, [role="button"], [contenteditable=""], [contenteditable="true"]';
     var submitted = false; // guard against a double submit while the page reloads
 
@@ -366,15 +366,15 @@
       var target = e.target;
       if (target && target.closest && target.closest(ownsSpace)) return;
 
-      // The server renders exactly one of these enabled: Stop while any
+      // the server renders exactly one of these enabled: Stop while any
       // filter is running, Start (when filters exist) otherwise.
       var btn = !stopBtn.disabled ? stopBtn : (!startBtn.disabled ? startBtn : null);
 
-      e.preventDefault(); // keep the page from scrolling
-      if (!btn) return;   // nothing to start or stop (no filters configured)
+      e.preventDefault(); // keep page from scrolling
+      if (!btn) return;   // nothing to start or stop
 
       submitted = true;
-      btn.click();        // submits the form, including its CSRF field
+      btn.click();        // submit the form
     });
   })();
 </script>
