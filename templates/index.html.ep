@@ -55,12 +55,12 @@
       <form method="post" action="<%= url_for('start_all') %>" class="d-inline">
         <%= csrf_field %>
         <button type="submit" id="start-all-btn" class="btn btn-success btn-sm" <%= (@$filters && !$any_running) ? '' : 'disabled' %>
-          title="Start every configured filter (spacebar)">Start</button>
+          title="Start the filter set (spacebar)">Start</button>
       </form>
       <form method="post" action="<%= url_for('stop_all') %>" class="d-inline">
         <%= csrf_field %>
         <button type="submit" id="stop-all-btn" class="btn btn-outline-dark btn-sm" <%= $any_running ? '' : 'disabled' %>
-          title="Stop every running filter (spacebar)">Stop</button>
+          title="Stop the running filter set (spacebar)">Stop</button>
       </form>
       <form method="post" action="<%= url_for('clear_filters') %>" class="d-inline">
         <%= csrf_field %>
